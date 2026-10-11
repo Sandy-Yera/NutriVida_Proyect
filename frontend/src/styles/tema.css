@@ -1,0 +1,98 @@
+:root {
+  --nv-maqui: #4a2b66;
+  --nv-cilantro: #2e7d57;
+  --nv-murta: #b03a4a;
+  --nv-miel: #c68a1e;
+  --nv-grafito: #23272c;
+  --nv-neblina: #f2f4f3;
+
+  --bs-primary: #4a2b66;
+  --bs-primary-rgb: 74, 43, 102;
+  --bs-success: #2e7d57;
+  --bs-success-rgb: 46, 125, 87;
+  --bs-danger: #b03a4a;
+  --bs-danger-rgb: 176, 58, 74;
+  --bs-warning: #c68a1e;
+  --bs-warning-rgb: 198, 138, 30;
+  --bs-body-color: #23272c;
+  --bs-body-bg: #f2f4f3;
+  --bs-body-font-family: "Atkinson Hyperlegible Next Variable", system-ui, sans-serif;
+  --bs-link-color: #4a2b66;
+  --bs-link-color-rgb: 74, 43, 102;
+  --bs-link-hover-color: #301b43;
+  --bs-link-hover-color-rgb: 48, 27, 67;
+  --bs-border-radius: 6px;
+  --bs-border-radius-lg: 12px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Alegreya Variable", Georgia, serif;
+  font-weight: 700;
+}
+
+.btn-primary {
+  --bs-btn-bg: #4a2b66;
+  --bs-btn-border-color: #4a2b66;
+  --bs-btn-hover-bg: #3b2152;
+  --bs-btn-hover-border-color: #3b2152;
+  --bs-btn-active-bg: #301b43;
+  --bs-btn-active-border-color: #301b43;
+  --bs-btn-disabled-bg: #4a2b66;
+  --bs-btn-disabled-border-color: #4a2b66;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #4a2b66;
+  --bs-btn-border-color: #4a2b66;
+  --bs-btn-hover-bg: #4a2b66;
+  --bs-btn-hover-border-color: #4a2b66;
+  --bs-btn-active-bg: #301b43;
+  --bs-btn-active-border-color: #301b43;
+}
+
+.estado {
+  display: inline-block;
+  padding: 2px 8px;
+  border-left: 4px solid;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+.estado-PENDIENTE {
+  background: #fbf3e3;
+  border-color: #c68a1e;
+  color: #6b4a0c;
+}
+.estado-CONFIRMADA {
+  background: #e4f1ea;
+  border-color: #2e7d57;
+  color: #1f5a3d;
+}
+.estado-ATENDIDA {
+  background: #eee8f4;
+  border-color: #4a2b66;
+  color: #4a2b66;
+}
+.estado-CANCELADA {
+  background: #f8e9eb;
+  border-color: #b03a4a;
+  color: #7e2734;
+}
+.estado-INASISTENCIA {
+  background: #e9ebec;
+  border-color: #23272c;
+  color: #23272c;
+}
+
+:focus-visible {
+  outline: 3px solid #c68a1e;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

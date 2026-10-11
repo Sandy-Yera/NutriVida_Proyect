@@ -1,0 +1,38 @@
+export const nutricionistasSemilla = [
+  {
+    id: "NUT001",
+    usuarioId: "U010",
+    nombre: "Carolina Fuentes M.",
+    especialidad: "Obesidad y síndrome metabólico",
+    dias: [1, 3, 5],
+    horaInicio: "09:00",
+    horaFin: "17:00",
+  },
+  {
+    id: "NUT002",
+    usuarioId: "U011",
+    nombre: "Rodrigo Sepúlveda A.",
+    especialidad: "Nutrición deportiva y rendimiento",
+    dias: [2, 4, 6],
+    horaInicio: "09:00",
+    horaFin: "14:00",
+  },
+  {
+    id: "NUT003",
+    usuarioId: "U012",
+    nombre: "Daniela Morales C.",
+    especialidad: "Alimentación vegetariana, vegana y trastornos alimentarios",
+    dias: [1, 2, 3, 4, 5],
+    horaInicio: "08:00",
+    horaFin: "13:00",
+  },
+  {
+    id: "NUT004",
+    usuarioId: "U013",
+    nombre: "Felipe Araya R.",
+    especialidad: "Nutrición pediátrica y familiar",
+    dias: [2, 3, 4, 5],
+    horaInicio: "14:00",
+    horaFin: "19:00",
+  },
+];
