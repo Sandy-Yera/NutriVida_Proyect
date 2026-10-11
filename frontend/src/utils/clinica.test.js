@@ -3,16 +3,22 @@ import {
   calcularImc,
   clasificarImc,
   describirDias,
+  diaDesdeFecha,
+  dominioCinta,
   filtrarServicios,
+  formatearMedida,
   incluyeDelPlan,
+  marcasCinta,
   pacientesDeNutricionista,
+  proximaCita,
+  serieProgreso,
   tipoDesdeSlug,
   urlSolicitarCita,
   validarContacto,
   validarMedicion,
 } from "./clinica.js";
 import { serviciosSemilla } from "../data/semillas/servicios.js";
-import { fichasSemilla } from "../data/semillas/fichas.js";
+import { fichasSemilla, medicionesSemilla } from "../data/semillas/fichas.js";
 
 describe("calcularImc y clasificarImc (C-T1)", () => {
   it("calcularImc(72.4, 170) da 25.1 y clasificarImc(25.1) da Sobrepeso", () => {
@@ -135,5 +141,61 @@ describe("lógica clínica, casos extra", () => {
       motivo: "Elige el motivo de tu mensaje.",
       mensaje: "El mensaje debe tener entre 10 y 500 caracteres.",
     });
+  });
+});
+
+describe("serieProgreso, formatearMedida y la cinta métrica", () => {
+  const mediciones = medicionesSemilla.filter((medicion) => medicion.pacienteId === "U100");
+
+  it("ordena por fecha, calcula el IMC de cada medición y omite las que no tienen el dato", () => {
+    const desordenadas = [...mediciones].reverse();
+    const conVacio = [{ ...mediciones[0], id: "M0090", fecha: "2026-07-10", grasaPct: null }];
+
+    expect(serieProgreso(desordenadas, "IMC").map((punto) => punto.valor)).toEqual([
+      27, 26.6, 26.2, 25.5, 25.1,
+    ]);
+    expect(serieProgreso([...mediciones, ...conVacio], "GRASA")).toHaveLength(5);
+  });
+
+  it("formatea con coma decimal, unidad y signo del cambio", () => {
+    expect(formatearMedida(72.4, "PESO", { conUnidad: true })).toBe("72,4 kg");
+    expect(formatearMedida(84, "CINTURA", { conUnidad: true })).toBe("84 cm");
+    expect(formatearMedida(29.9, "GRASA", { conUnidad: true })).toBe("29,9 %");
+    expect(formatearMedida(-5.6, "PESO", { conUnidad: true, conSigno: true })).toBe("-5,6 kg");
+    expect(formatearMedida(null, "PESO")).toBe("—");
+  });
+
+  it("la cinta parte el día 1 del primer mes y termina 10 días después de la última medición", () => {
+    const dominio = dominioCinta(serieProgreso(mediciones, "PESO"));
+    const marcas = marcasCinta(dominio);
+
+    expect(dominio).toEqual({
+      desde: diaDesdeFecha("2026-07-01"),
+      hasta: diaDesdeFecha("2026-10-12"),
+    });
+    expect(marcas[0]).toEqual({ fecha: "2026-07-01", tipo: "mes", posicion: 0, etiqueta: "jul" });
+    expect(marcas.at(-1)).toMatchObject({ fecha: "2026-10-12", posicion: 1 });
+    expect(marcas.find((marca) => marca.fecha === "2026-07-06").tipo).toBe("semana");
+    expect(marcas.find((marca) => marca.fecha === "2026-07-07").tipo).toBe("dia");
+  });
+});
+
+describe("proximaCita", () => {
+  const ahora = new Date(2026, 9, 11, 10, 0);
+  const cita = (id, pacienteId, fecha, hora, estado) => ({ id, pacienteId, fecha, hora, estado });
+  const citas = [
+    cita("C1", "U102", "2026-10-12", "08:00", "PENDIENTE"),
+    cita("C2", "U100", "2026-10-12", "09:00", "CANCELADA"),
+    cita("C3", "U100", "2026-10-11", "09:30", "CONFIRMADA"),
+    cita("C4", "U100", "2026-10-20", "11:00", "CONFIRMADA"),
+    cita("C5", "U100", "2026-10-13", "15:00", "PENDIENTE"),
+  ];
+
+  it("devuelve la cita pendiente o confirmada más cercana del paciente", () => {
+    expect(proximaCita(citas, "U100", ahora).id).toBe("C5");
+  });
+
+  it("ignora citas de otros pacientes, canceladas o que ya pasaron", () => {
+    expect(proximaCita(citas.slice(0, 3), "U100", ahora)).toBeNull();
   });
 });

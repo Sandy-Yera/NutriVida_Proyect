@@ -167,3 +167,139 @@ export function validarContacto(datos) {
   }
   return errores;
 }
+
+export const INDICADORES_PROGRESO = {
+  PESO: { nombre: "Peso", unidad: "kg", decimalesFijos: true },
+  CINTURA: { nombre: "Cintura", unidad: "cm", decimalesFijos: false },
+  IMC: { nombre: "IMC", unidad: "", decimalesFijos: true },
+  GRASA: { nombre: "% grasa", unidad: "%", decimalesFijos: true },
+};
+
+export const COMIDAS_PLAN = [
+  { clave: "desayuno", nombre: "Desayuno" },
+  { clave: "colacion", nombre: "Colación" },
+  { clave: "almuerzo", nombre: "Almuerzo" },
+  { clave: "once", nombre: "Once" },
+  { clave: "cena", nombre: "Cena" },
+];
+
+const MESES_CINTA = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
+];
+
+const MS_DIA = 86400000;
+
+export function diaDesdeFecha(fecha) {
+  const [anio, mes, dia] = fecha.split("-").map(Number);
+  return Date.UTC(anio, mes - 1, dia) / MS_DIA;
+}
+
+export function fechaDesdeDia(numero) {
+  return new Date(numero * MS_DIA).toISOString().slice(0, 10);
+}
+
+export function valorIndicador(medicion, indicador) {
+  const valores = {
+    PESO: medicion.pesoKg,
+    CINTURA: medicion.cinturaCm,
+    IMC: calcularImc(medicion.pesoKg, medicion.tallaCm),
+    GRASA: medicion.grasaPct,
+  };
+  const valor = valores[indicador];
+  return valor === null || valor === undefined || Number.isNaN(Number(valor))
+    ? null
+    : Number(valor);
+}
+
+export function serieProgreso(mediciones, indicador) {
+  return [...mediciones]
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+    .map((medicion) => ({
+      fecha: medicion.fecha,
+      dia: diaDesdeFecha(medicion.fecha),
+      valor: valorIndicador(medicion, indicador),
+    }))
+    .filter((punto) => punto.valor !== null);
+}
+
+export function formatearMedida(valor, indicador, { conUnidad = false, conSigno = false } = {}) {
+  if (valor === null || valor === undefined) return "—";
+  const { unidad, decimalesFijos } = INDICADORES_PROGRESO[indicador];
+  const numero = new Intl.NumberFormat("es-CL", {
+    minimumFractionDigits: decimalesFijos ? 1 : 0,
+    maximumFractionDigits: 1,
+    signDisplay: conSigno ? "exceptZero" : "auto",
+  }).format(valor);
+  if (!conUnidad || !unidad) return numero;
+  return unidad === "%" ? `${numero} %` : `${numero} ${unidad}`;
+}
+
+export function resumenProgreso(serie) {
+  if (serie.length === 0) return null;
+  const inicial = serie[0];
+  const actual = serie.at(-1);
+  return { inicial, actual, cambio: Math.round((actual.valor - inicial.valor) * 10) / 10 };
+}
+
+export function dominioValores(valores) {
+  const minimo = Math.min(...valores);
+  const maximo = Math.max(...valores);
+  const margen = Math.max((maximo - minimo) * 0.15, 1);
+  return [Math.floor(minimo - margen), Math.ceil(maximo + margen)];
+}
+
+export function dominioCinta(serie) {
+  if (serie.length === 0) return null;
+  const inicioMes = `${serie[0].fecha.slice(0, 7)}-01`;
+  return { desde: diaDesdeFecha(inicioMes), hasta: serie.at(-1).dia + 10 };
+}
+
+export function marcasCinta({ desde, hasta }) {
+  const marcas = [];
+  for (let numero = desde; numero <= hasta; numero += 1) {
+    const fecha = fechaDesdeDia(numero);
+    const diaMes = Number(fecha.slice(8, 10));
+    const diaSemana = new Date(numero * MS_DIA).getUTCDay();
+    let tipo = "dia";
+    if (diaMes === 1) tipo = "mes";
+    else if (diaSemana === 1) tipo = "semana";
+    marcas.push({
+      fecha,
+      tipo,
+      posicion: (numero - desde) / (hasta - desde),
+      etiqueta: tipo === "mes" ? MESES_CINTA[Number(fecha.slice(5, 7)) - 1] : null,
+    });
+  }
+  return marcas;
+}
+
+const ESTADOS_PROXIMA_CITA = ["PENDIENTE", "CONFIRMADA"];
+
+function fechaHoraLocal(fecha) {
+  const dos = (n) => String(n).padStart(2, "0");
+  const dia = `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())}`;
+  return `${dia}T${dos(fecha.getHours())}:${dos(fecha.getMinutes())}`;
+}
+
+export function proximaCita(citas, pacienteId, ahora = new Date()) {
+  const limite = fechaHoraLocal(ahora);
+  const vigentes = citas.filter(
+    (cita) =>
+      cita.pacienteId === pacienteId &&
+      ESTADOS_PROXIMA_CITA.includes(cita.estado) &&
+      `${cita.fecha}T${cita.hora}` >= limite,
+  );
+  vigentes.sort((a, b) => `${a.fecha}T${a.hora}`.localeCompare(`${b.fecha}T${b.hora}`));
+  return vigentes[0] ?? null;
+}
