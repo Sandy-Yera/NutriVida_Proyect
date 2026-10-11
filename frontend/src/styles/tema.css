@@ -157,8 +157,16 @@ h3 {
   box-shadow: 0 0 0 0.2rem rgba(74, 43, 102, 0.2);
 }
 
+.table {
+  --bs-table-bg: transparent;
+}
+
 .tabla-lista {
   --bs-table-bg: #fff;
+}
+
+.cifra {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 767.98px) {
@@ -190,4 +198,9 @@ h3 {
     font-weight: 600;
     text-align: left;
   }
+}
+
+.medidor-inasistencia {
+  --bs-progress-bg: #f8e9eb;
+  --bs-progress-height: 0.5rem;
 }

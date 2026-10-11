@@ -25,8 +25,28 @@ export function enlacesParaRol(rol) {
 
 export const menuAdmin = [
   { texto: "Dashboard", ruta: "/admin", icono: "bi-speedometer2", exacta: true },
-  { texto: "Usuarios", ruta: "/admin/usuarios", icono: "bi-people" },
-  { texto: "Citas", ruta: "/admin/citas", icono: "bi-calendar-check" },
-  { texto: "Servicios", ruta: "/admin/servicios", icono: "bi-clipboard2-pulse" },
-  { texto: "Reportes", ruta: "/admin/reportes", icono: "bi-bar-chart" },
+  {
+    texto: "Usuarios",
+    ruta: "/admin/usuarios",
+    icono: "bi-people",
+    descripcion: "Crear, editar, asignar rol y desactivar cuentas.",
+  },
+  {
+    texto: "Citas",
+    ruta: "/admin/citas",
+    icono: "bi-calendar-check",
+    descripcion: "Listado de citas y comprobantes de pago.",
+  },
+  {
+    texto: "Servicios",
+    ruta: "/admin/servicios",
+    icono: "bi-clipboard2-pulse",
+    descripcion: "Catálogo de consultas, planes, evaluaciones y talleres.",
+  },
+  {
+    texto: "Reportes",
+    ruta: "/admin/reportes",
+    icono: "bi-bar-chart",
+    descripcion: "Atenciones e inasistencia por período y por nutricionista.",
+  },
 ];

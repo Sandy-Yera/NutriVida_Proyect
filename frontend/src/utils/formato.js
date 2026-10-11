@@ -29,3 +29,18 @@ export function formatearTelefono(telefono) {
   if (!/^569\d{8}$/.test(digitos)) return String(telefono ?? "").trim();
   return `+56 9 ${digitos.slice(3, 7)} ${digitos.slice(7)}`;
 }
+
+export function aFechaIso(fecha) {
+  const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dd = String(fecha.getDate()).padStart(2, "0");
+  return `${fecha.getFullYear()}-${mm}-${dd}`;
+}
+
+export function formatearPorcentaje(fraccion) {
+  const valor = (fraccion * 100).toLocaleString("es-CL", { maximumFractionDigits: 1 });
+  return `${valor} %`;
+}
+
+export function pluralizar(cantidad, singular, plural) {
+  return `${cantidad} ${cantidad === 1 ? singular : plural}`;
+}
