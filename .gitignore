@@ -13,3 +13,4 @@ logs/
 .idea/
 .DS_Store
 *.md
+!frontend/README.md
