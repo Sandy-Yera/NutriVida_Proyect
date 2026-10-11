@@ -4,6 +4,8 @@ import Login from "../pages/acceso/Login.jsx";
 import Registro from "../pages/acceso/Registro.jsx";
 import Perfil from "../pages/acceso/Perfil.jsx";
 import RutaProtegida from "../components/comunes/RutaProtegida.jsx";
+import Consejos from "../pages/contenido/Consejos.jsx";
+import ConsejoDetalle from "../pages/contenido/ConsejoDetalle.jsx";
 import Dashboard from "../pages/acceso/admin/Dashboard.jsx";
 import AdminUsuarios from "../pages/acceso/admin/AdminUsuarios.jsx";
 import UsuarioFormulario from "../pages/acceso/admin/UsuarioFormulario.jsx";
@@ -14,6 +16,8 @@ export const rutasAcceso = (
   <>
     <Route path="login" element={<Login />} />
     <Route path="registro" element={<Registro />} />
+    <Route path="consejos" element={<Consejos />} />
+    <Route path="consejos/:id" element={<ConsejoDetalle />} />
     <Route
       path="perfil"
       element={

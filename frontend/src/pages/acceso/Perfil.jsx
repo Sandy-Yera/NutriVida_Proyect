@@ -5,16 +5,7 @@ import FormDatosPerfil from "../../components/acceso/FormDatosPerfil.jsx";
 import { obtenerSesion } from "../../auth/auth.js";
 import { NOMBRE_ROL } from "../../config/roles.js";
 import { actualizarUsuario, cambiarClave, obtenerUsuario } from "../../services/usuariosService.js";
-import { aFechaLocal } from "../../utils/formato.js";
-
-function fechaLarga(texto) {
-  if (!texto) return "No registrada";
-  return aFechaLocal(texto).toLocaleDateString("es-CL", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
+import { formatearFechaLarga } from "../../utils/formato.js";
 
 export default function Perfil() {
   const navigate = useNavigate();
@@ -70,7 +61,11 @@ export default function Perfil() {
               <dt className="col-5 col-sm-4 fw-semibold">Rol</dt>
               <dd className="col-7 col-sm-8">{NOMBRE_ROL[usuario.rol] ?? usuario.rol}</dd>
               <dt className="col-5 col-sm-4 fw-semibold">Fecha de nacimiento</dt>
-              <dd className="col-7 col-sm-8 mb-0">{fechaLarga(usuario.fechaNacimiento)}</dd>
+              <dd className="col-7 col-sm-8 mb-0">
+                {usuario.fechaNacimiento
+                  ? formatearFechaLarga(usuario.fechaNacimiento)
+                  : "No registrada"}
+              </dd>
             </dl>
             <FormDatosPerfil usuario={usuario} onGuardar={guardarDatos} />
           </div>

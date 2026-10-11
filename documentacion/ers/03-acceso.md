@@ -156,7 +156,11 @@ Todos los roles pasan por este módulo: el login es la puerta de entrada y la na
 - **Reglas:**
   - Cada consejo muestra el título, el resumen, el nutricionista autor y la fecha.
   - Si el id del consejo no existe, se muestra "El consejo que buscas no existe." y un enlace a la lista.
-- **Datos:** artículos estáticos en `data/semillas/articulos.js`, firmados por nutricionistas de la clínica.
+  - La lista va del consejo más reciente al más antiguo.
+  - El detalle invita a solicitar una cita con el nutricionista autor, con la URL acordada con el módulo de citas: `/citas/solicitar?nutricionista=NUT003`.
+  - La página 404 muestra la dirección que no existe y los enlaces al inicio y a los consejos.
+- **Datos:** artículos estáticos en `data/semillas/articulos.js`, firmados por nutricionistas de la clínica; el nombre y la especialidad del autor se piden a `serviciosService` del módulo clínico.
+- **Pruebas:** pruebas extra de `Consejos.test.jsx`, `ConsejoDetalle.test.jsx` y `App.test.jsx`.
 
 ## 3.4 Datos del módulo
 
@@ -202,10 +206,13 @@ Roles: `ADMIN`, `SECRETARIA`, `NUTRICIONISTA` y `PACIENTE`. Los nombres de los c
 - `auth/auth.test.js`: sesión mínima, usuario desactivado y ruta de inicio por rol.
 - `components/comunes/Navbar.test.jsx`: menú por rol, enlace activo, menú hamburguesa y cierre de sesión.
 - `pages/acceso/Registro.test.jsx`: errores por campo, registro completo y correo repetido.
+- `pages/acceso/Perfil.test.jsx`: edición de datos con el nombre nuevo en la barra superior y cambio de contraseña.
 - `components/acceso/FormUsuario.test.jsx`: crear, editar y cuenta propia, con `vi.fn()` como `onGuardar`.
 - `pages/acceso/admin/AdminUsuarios.test.jsx`: desactivar con confirmación y filtros, con `vi.mock` de `usuariosService`.
 - `pages/acceso/admin/Reportes.test.jsx` y `Dashboard.test.jsx`: carga con `useEffect` y cambio de rango, con `vi.mock` de los servicios.
 - `utils/formato.test.js` y `utils/reportes.test.js`: formatos y rangos de fechas.
+- `pages/contenido/Consejos.test.jsx` y `ConsejoDetalle.test.jsx`: lista, detalle con `useParams` e id inexistente.
+- `App.test.jsx`: rutas conectadas y página 404.
 
 ## 3.8 Trazabilidad
 
@@ -219,7 +226,7 @@ Roles: `ADMIN`, `SECRETARIA`, `NUTRICIONISTA` y `PACIENTE`. Los nombres de los c
 | RF-ACC-06 | `/admin/usuarios` | `AdminUsuarios`, `FiltroUsuarios`, `TablaUsuarios` | `AdminUsuarios.test.jsx`, `usuariosData.test.js` |
 | RF-ACC-07 | `/admin/usuarios/nuevo`, `/admin/usuarios/:id` | `UsuarioFormulario`, `FormUsuario`, `DialogoConfirmacion` | `FormUsuario.test.jsx`, `AdminUsuarios.test.jsx`, `usuariosService.test.js` |
 | RF-ACC-08 | `/admin`, `/admin/reportes` | `Dashboard`, `Reportes`, `TarjetaKpi`, `GraficoBarras`, `MedidorInasistencia` | `Dashboard.test.jsx`, `Reportes.test.jsx`, `reportes.test.js` |
-| RF-ACC-09 | `/consejos`, `/consejos/:id`, `*` | `Consejos`, `ConsejoDetalle`, `ArticuloCard`, `NoEncontrada` | Revisión manual |
+| RF-ACC-09 | `/consejos`, `/consejos/:id`, `*` | `Consejos`, `ConsejoDetalle`, `ArticuloCard`, `NoEncontrada` | `Consejos.test.jsx`, `ConsejoDetalle.test.jsx`, `App.test.jsx` |
 
 ## 3.9 Datos asumidos
 

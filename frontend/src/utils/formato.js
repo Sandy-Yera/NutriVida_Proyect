@@ -10,6 +10,14 @@ export function aFechaLocal(texto) {
   return new Date(anio, mes - 1, dia);
 }
 
+export function formatearFechaLarga(texto) {
+  return aFechaLocal(texto).toLocaleDateString("es-CL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function formatearFecha(texto) {
   const f = aFechaLocal(texto);
   return `${DIAS[f.getDay()]} ${f.getDate()} ${MESES[f.getMonth()]}`;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aFechaIso,
+  formatearFechaLarga,
   formatearPorcentaje,
   formatearPrecio,
   formatearRut,
@@ -28,5 +29,11 @@ describe("aFechaIso, formatearPorcentaje y pluralizar", () => {
     expect(formatearPorcentaje(0.125)).toBe("12,5 %");
     expect(pluralizar(1, "cita", "citas")).toBe("1 cita");
     expect(pluralizar(3, "cita", "citas")).toBe("3 citas");
+  });
+});
+
+describe("formatearFechaLarga", () => {
+  it("muestra la fecha completa en español", () => {
+    expect(formatearFechaLarga("2026-10-01")).toBe("1 de octubre de 2026");
   });
 });
