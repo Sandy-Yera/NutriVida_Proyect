@@ -46,22 +46,28 @@ function coincideTexto(usuario, texto) {
   );
 }
 
+function errorDeCampo(campo, mensaje) {
+  const error = new Error(mensaje);
+  error.campo = campo;
+  return error;
+}
+
 function validarUnicos(usuarios, datos, idExcluido = null) {
   const otros = usuarios.filter((u) => u.id !== idExcluido);
   if (
     datos.correo !== undefined &&
     otros.some((u) => normalizarCorreo(u.correo) === normalizarCorreo(datos.correo))
   ) {
-    throw new Error("Ya existe un usuario con ese correo.");
+    throw errorDeCampo("correo", "Ya existe un usuario con ese correo.");
   }
   if (
     datos.rut !== undefined &&
     otros.some((u) => normalizarRut(u.rut) === normalizarRut(datos.rut))
   ) {
-    throw new Error("Ya existe un usuario con ese RUT.");
+    throw errorDeCampo("rut", "Ya existe un usuario con ese RUT.");
   }
   if (datos.nutricionistaId && otros.some((u) => u.nutricionistaId === datos.nutricionistaId)) {
-    throw new Error("Ese nutricionista ya está vinculado a otro usuario.");
+    throw errorDeCampo("nutricionistaId", "Ese nutricionista ya está vinculado a otro usuario.");
   }
 }
 

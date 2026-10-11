@@ -23,6 +23,10 @@
   --bs-link-hover-color-rgb: 48, 27, 67;
   --bs-border-radius: 6px;
   --bs-border-radius-lg: 12px;
+  --bs-form-invalid-color: #b03a4a;
+  --bs-form-invalid-border-color: #b03a4a;
+  --bs-form-valid-color: #2e7d57;
+  --bs-form-valid-border-color: #2e7d57;
 }
 
 h1,
