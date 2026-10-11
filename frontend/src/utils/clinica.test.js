@@ -4,6 +4,8 @@ import {
   clasificarImc,
   filtrarServicios,
   pacientesDeNutricionista,
+  tipoDesdeSlug,
+  urlSolicitarCita,
   validarMedicion,
 } from "./clinica.js";
 import { serviciosSemilla } from "../data/semillas/servicios.js";
@@ -73,5 +75,17 @@ describe("lógica clínica, casos extra", () => {
   it("pacientesDeNutricionista deja solo las fichas de ese nutricionista", () => {
     expect(pacientesDeNutricionista(fichasSemilla, "NUT001").map((f) => f.id)).toEqual(["U100"]);
     expect(pacientesDeNutricionista(fichasSemilla, "NUT004")).toEqual([]);
+  });
+
+  it("urlSolicitarCita incluye solo los parámetros elegidos y tipoDesdeSlug traduce la categoría", () => {
+    expect(urlSolicitarCita({ servicio: "CN001", nutricionista: "NUT003" })).toBe(
+      "/citas/solicitar?servicio=CN001&nutricionista=NUT003",
+    );
+    expect(urlSolicitarCita({ servicio: "", nutricionista: "NUT001" })).toBe(
+      "/citas/solicitar?nutricionista=NUT001",
+    );
+    expect(urlSolicitarCita()).toBe("/citas/solicitar");
+    expect(tipoDesdeSlug("planes")).toBe("PLAN");
+    expect(tipoDesdeSlug("otra")).toBeNull();
   });
 });

@@ -72,3 +72,31 @@ export function filtrarServicios(lista, { tipo, texto } = {}) {
 export function pacientesDeNutricionista(fichas, nutricionistaId) {
   return fichas.filter((ficha) => ficha.nutricionistaId === nutricionistaId);
 }
+
+export const NOMBRE_TIPO_SERVICIO = {
+  CONSULTA: "Consultas",
+  PLAN: "Planes",
+  EVALUACION: "Evaluaciones",
+  TALLER: "Talleres",
+};
+
+export const SLUG_TIPO_SERVICIO = {
+  CONSULTA: "consultas",
+  PLAN: "planes",
+  EVALUACION: "evaluaciones",
+  TALLER: "talleres",
+};
+
+export const TIPOS_AGENDABLES = ["CONSULTA", "EVALUACION", "PLAN"];
+
+export function tipoDesdeSlug(slug) {
+  return Object.keys(SLUG_TIPO_SERVICIO).find((tipo) => SLUG_TIPO_SERVICIO[tipo] === slug) ?? null;
+}
+
+export function urlSolicitarCita({ servicio, nutricionista } = {}) {
+  const parametros = new URLSearchParams();
+  if (servicio) parametros.set("servicio", servicio);
+  if (nutricionista) parametros.set("nutricionista", nutricionista);
+  const consulta = parametros.toString();
+  return consulta ? `/citas/solicitar?${consulta}` : "/citas/solicitar";
+}
