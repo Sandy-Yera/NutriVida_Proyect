@@ -1,4 +1,4 @@
-import { usuariosSemilla } from "../data/semillas/usuarios.js";
+import { listar, normalizarCorreo, obtener } from "../data/usuariosData.js";
 
 const CLAVE_SESION = "usuarioActual";
 
@@ -9,33 +9,47 @@ const RUTA_INICIO = {
   PACIENTE: "/mis-citas",
 };
 
-export function iniciarSesion(correo, clave) {
-  const correoNormalizado = String(correo ?? "")
-    .trim()
-    .toLowerCase();
-  const usuario = usuariosSemilla.find(
-    (u) => u.correo.toLowerCase() === correoNormalizado && u.clave === clave,
-  );
-  if (!usuario) return { ok: false, error: "Correo o contraseña incorrectos." };
-  const sesion = {
+function aSesion(usuario) {
+  return {
     id: usuario.id,
     nombre: usuario.nombre,
     rol: usuario.rol,
-    nutricionistaId: usuario.nutricionistaId,
+    nutricionistaId: usuario.nutricionistaId ?? null,
   };
-  localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion));
-  return { ok: true, usuario: sesion };
 }
 
-export function obtenerSesion() {
+function leerSesionGuardada() {
   const guardada = localStorage.getItem(CLAVE_SESION);
   if (!guardada) return null;
   try {
     return JSON.parse(guardada);
   } catch {
-    localStorage.removeItem(CLAVE_SESION);
     return null;
   }
+}
+
+export function iniciarSesion(correo, clave) {
+  const correoBuscado = normalizarCorreo(correo);
+  const usuario = listar().find((u) => normalizarCorreo(u.correo) === correoBuscado);
+  if (!usuario || usuario.clave !== clave) {
+    return { ok: false, error: "Correo o contraseña incorrectos." };
+  }
+  if (!usuario.activo) {
+    return { ok: false, error: "Tu cuenta está desactivada. Contacta a la clínica." };
+  }
+  const sesion = aSesion(usuario);
+  localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion));
+  return { ok: true, usuario: sesion };
+}
+
+export function obtenerSesion() {
+  const guardada = leerSesionGuardada();
+  const usuario = guardada?.id ? obtener(guardada.id) : null;
+  if (!usuario || !usuario.activo) {
+    cerrarSesion();
+    return null;
+  }
+  return aSesion(usuario);
 }
 
 export function cerrarSesion() {
@@ -44,7 +58,7 @@ export function cerrarSesion() {
 
 export function tieneRol(...roles) {
   const sesion = obtenerSesion();
-  return Boolean(sesion) && roles.includes(sesion.rol);
+  return sesion !== null && roles.includes(sesion.rol);
 }
 
 export function rutaInicioPorRol(rol) {
