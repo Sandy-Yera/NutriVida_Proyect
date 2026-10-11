@@ -117,3 +117,23 @@ export function validarUsuario(datos, { esNuevo = false } = {}) {
   };
   return soloConError(errores);
 }
+
+export function validarPerfil(datos) {
+  return soloConError({
+    nombre: validarTexto(datos.nombre, "El nombre"),
+    apellido: validarTexto(datos.apellido, "El apellido"),
+    telefono: validarTelefono(datos.telefono),
+  });
+}
+
+export function validarCambioClave({ claveActual, claveNueva, confirmacion }) {
+  let errorNueva = validarClave(claveNueva);
+  if (!errorNueva && claveActual && claveNueva === claveActual) {
+    errorNueva = "La nueva contraseña debe ser distinta de la actual.";
+  }
+  return soloConError({
+    claveActual: claveActual ? "" : "Ingresa tu contraseña actual.",
+    claveNueva: errorNueva,
+    confirmacion: validarConfirmacion(claveNueva, confirmacion),
+  });
+}

@@ -153,3 +153,14 @@ export function cambiarRol(id, rol) {
 export function registrarPaciente(datos) {
   return crear({ ...datos, rol: "PACIENTE", nutricionistaId: null, activo: true });
 }
+
+export function cambiarClave(id, claveActual, claveNueva) {
+  const usuarios = leer(CLAVE, usuariosSemilla);
+  const indice = buscarIndice(usuarios, id);
+  if (usuarios[indice].clave !== claveActual) {
+    throw errorDeCampo("claveActual", "La contraseña actual no es correcta.");
+  }
+  usuarios[indice] = { ...usuarios[indice], clave: claveNueva };
+  guardar(CLAVE, usuarios);
+  return usuarios[indice];
+}

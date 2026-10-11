@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   actualizar,
   cambiarEstado,
+  cambiarClave,
   cambiarRol,
   crear,
   listar,
@@ -85,5 +86,15 @@ describe("usuariosData", () => {
     const paciente = registrarPaciente({ ...nuevaSecretaria, rol: "ADMIN", activo: false });
 
     expect(paciente).toMatchObject({ rol: "PACIENTE", activo: true, nutricionistaId: null });
+  });
+
+  it("cambia la clave solo si la actual es correcta", () => {
+    expect(() => cambiarClave("U100", "Otra2026!", "Nueva2027!")).toThrow(
+      "La contraseña actual no es correcta.",
+    );
+
+    cambiarClave("U100", "Paciente2026!", "Nueva2027!");
+
+    expect(leerGuardados().find((u) => u.id === "U100").clave).toBe("Nueva2027!");
   });
 });

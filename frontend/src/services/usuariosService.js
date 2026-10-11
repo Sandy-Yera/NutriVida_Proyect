@@ -49,3 +49,7 @@ export async function cambiarRol(id, rol) {
 export async function registrarPaciente(datos) {
   return sinClave(usuariosData.registrarPaciente(datos));
 }
+
+export async function cambiarClave(id, claveActual, claveNueva) {
+  return sinClave(usuariosData.cambiarClave(id, claveActual, claveNueva));
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calcularDigitoVerificador,
+  validarCambioClave,
   validarClave,
   validarConfirmacion,
   validarCorreo,
@@ -127,5 +128,29 @@ describe("validaciones, casos extra", () => {
     ]);
     expect(validarUsuario({ ...base, rol: "SECRETARIA" })).toEqual({});
     expect(validarUsuario({ ...base, rol: "" }).rol).toBe("Selecciona un rol.");
+  });
+
+  it("validarCambioClave pide la actual y una nueva distinta que cumpla las reglas", () => {
+    expect(
+      validarCambioClave({ claveActual: "", claveNueva: "corta", confirmacion: "otra" }),
+    ).toEqual({
+      claveActual: "Ingresa tu contraseña actual.",
+      claveNueva: "La contraseña debe tener al menos 8 caracteres.",
+      confirmacion: "Las contraseñas no coinciden.",
+    });
+    expect(
+      validarCambioClave({
+        claveActual: "Paciente2026!",
+        claveNueva: "Paciente2026!",
+        confirmacion: "Paciente2026!",
+      }).claveNueva,
+    ).toBe("La nueva contraseña debe ser distinta de la actual.");
+    expect(
+      validarCambioClave({
+        claveActual: "Paciente2026!",
+        claveNueva: "Nueva2027!",
+        confirmacion: "Nueva2027!",
+      }),
+    ).toEqual({});
   });
 });
