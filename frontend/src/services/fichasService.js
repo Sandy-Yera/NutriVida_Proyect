@@ -1,29 +1,29 @@
-import { fichasSemilla, medicionesSemilla, planesSemilla } from "../data/semillas/fichas.js";
+import * as fichasData from "../data/fichasData.js";
 
 export async function listarPacientes(nutricionistaId) {
-  return fichasSemilla;
+  return fichasData.listarFichas(nutricionistaId);
 }
 
 export async function obtenerFicha(pacienteId) {
-  return fichasSemilla.find((f) => f.id === pacienteId) ?? null;
+  return fichasData.obtenerFicha(pacienteId);
 }
 
 export async function crearFicha(datos) {
-  return { ...datos, creadaEn: new Date().toLocaleDateString("sv-SE") };
+  return fichasData.crearFicha(datos);
 }
 
 export async function listarMediciones(pacienteId) {
-  return medicionesSemilla.filter((m) => m.pacienteId === pacienteId);
+  return fichasData.listarMediciones(pacienteId);
 }
 
 export async function registrarMedicion(pacienteId, datos) {
-  return { ...datos, id: "M9999", pacienteId };
+  return fichasData.registrarMedicion(pacienteId, datos);
 }
 
 export async function obtenerPlan(pacienteId) {
-  return planesSemilla.find((p) => p.pacienteId === pacienteId) ?? null;
+  return fichasData.obtenerPlan(pacienteId);
 }
 
 export async function guardarPlan(pacienteId, plan) {
-  return { ...plan, pacienteId };
+  return fichasData.guardarPlan(pacienteId, plan);
 }
