@@ -2,6 +2,8 @@ import { Route } from "react-router-dom";
 import Login from "../pages/acceso/Login.jsx";
 import Registro from "../pages/acceso/Registro.jsx";
 import Dashboard from "../pages/acceso/admin/Dashboard.jsx";
+import AdminUsuarios from "../pages/acceso/admin/AdminUsuarios.jsx";
+import UsuarioFormulario from "../pages/acceso/admin/UsuarioFormulario.jsx";
 
 export const rutasAcceso = (
   <>
@@ -13,5 +15,8 @@ export const rutasAcceso = (
 export const rutasAdminAcceso = (
   <>
     <Route index element={<Dashboard />} />
+    <Route path="usuarios" element={<AdminUsuarios />} />
+    <Route path="usuarios/nuevo" element={<UsuarioFormulario />} />
+    <Route path="usuarios/:id" element={<UsuarioFormulario />} />
   </>
 );

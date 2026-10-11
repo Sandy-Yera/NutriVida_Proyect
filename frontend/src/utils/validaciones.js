@@ -1,4 +1,5 @@
 import { aFechaLocal } from "./formato.js";
+import { ROLES } from "../config/roles.js";
 
 const SOLO_LETRAS = /^[\p{L}\s'.-]+$/u;
 
@@ -81,6 +82,10 @@ export function validarFechaNacimiento(fecha, hoy = new Date()) {
   return "";
 }
 
+function soloConError(errores) {
+  return Object.fromEntries(Object.entries(errores).filter(([, mensaje]) => mensaje !== ""));
+}
+
 export function validarRegistro(datos, hoy = new Date()) {
   const errores = {
     nombre: validarTexto(datos.nombre, "El nombre"),
@@ -93,5 +98,22 @@ export function validarRegistro(datos, hoy = new Date()) {
     confirmacion: validarConfirmacion(datos.clave, datos.confirmacion),
     acepta: datos.acepta ? "" : "Debes aceptar el tratamiento de tus datos de salud.",
   };
-  return Object.fromEntries(Object.entries(errores).filter(([, mensaje]) => mensaje !== ""));
+  return soloConError(errores);
+}
+
+export function validarUsuario(datos, { esNuevo = false } = {}) {
+  const errores = {
+    nombre: validarTexto(datos.nombre, "El nombre"),
+    apellido: validarTexto(datos.apellido, "El apellido"),
+    rut: validarRut(datos.rut),
+    correo: validarCorreo(datos.correo),
+    telefono: validarTelefono(datos.telefono),
+    rol: ROLES.includes(datos.rol) ? "" : "Selecciona un rol.",
+    nutricionistaId:
+      datos.rol === "NUTRICIONISTA" && !datos.nutricionistaId
+        ? "Selecciona el nutricionista vinculado."
+        : "",
+    clave: esNuevo ? validarClave(datos.clave) : "",
+  };
+  return soloConError(errores);
 }

@@ -122,3 +122,72 @@ h3 {
     align-self: flex-start;
   }
 }
+
+.btn-danger {
+  --bs-btn-bg: #b03a4a;
+  --bs-btn-border-color: #b03a4a;
+  --bs-btn-hover-bg: #96303f;
+  --bs-btn-hover-border-color: #96303f;
+  --bs-btn-active-bg: #7e2734;
+  --bs-btn-active-border-color: #7e2734;
+  --bs-btn-disabled-bg: #b03a4a;
+  --bs-btn-disabled-border-color: #b03a4a;
+}
+
+.btn-outline-danger {
+  --bs-btn-color: #b03a4a;
+  --bs-btn-border-color: #b03a4a;
+  --bs-btn-hover-bg: #b03a4a;
+  --bs-btn-hover-border-color: #b03a4a;
+  --bs-btn-active-bg: #7e2734;
+  --bs-btn-active-border-color: #7e2734;
+  --bs-btn-disabled-color: #b03a4a;
+  --bs-btn-disabled-border-color: #b03a4a;
+}
+
+.form-check-input:checked {
+  background-color: #4a2b66;
+  border-color: #4a2b66;
+}
+
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+  border-color: #8a6fa3;
+  box-shadow: 0 0 0 0.2rem rgba(74, 43, 102, 0.2);
+}
+
+.tabla-lista {
+  --bs-table-bg: #fff;
+}
+
+@media (max-width: 767.98px) {
+  .tabla-lista thead {
+    display: none;
+  }
+
+  .tabla-lista tbody tr {
+    display: block;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: #fff;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+  }
+
+  .tabla-lista tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.35rem 0;
+    text-align: right;
+    border: 0;
+  }
+
+  .tabla-lista tbody td::before {
+    content: attr(data-etiqueta);
+    font-weight: 600;
+    text-align: left;
+  }
+}

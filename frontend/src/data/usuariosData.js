@@ -1,9 +1,8 @@
 import { guardar, leer } from "./almacen.js";
 import { usuariosSemilla } from "./semillas/usuarios.js";
+import { ROLES } from "../config/roles.js";
 
 const CLAVE = "nv_usuarios";
-
-export const ROLES = ["ADMIN", "SECRETARIA", "NUTRICIONISTA", "PACIENTE"];
 
 function normalizarTexto(texto) {
   return String(texto ?? "")
@@ -46,7 +45,7 @@ function coincideTexto(usuario, texto) {
   );
 }
 
-function errorDeCampo(campo, mensaje) {
+export function errorDeCampo(campo, mensaje) {
   const error = new Error(mensaje);
   error.campo = campo;
   return error;
@@ -72,7 +71,7 @@ function validarUnicos(usuarios, datos, idExcluido = null) {
 }
 
 function validarRol(rol) {
-  if (!ROLES.includes(rol)) throw new Error("El rol no es válido.");
+  if (!ROLES.includes(rol)) throw errorDeCampo("rol", "El rol no es válido.");
 }
 
 function buscarIndice(usuarios, id) {

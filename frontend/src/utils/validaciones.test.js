@@ -9,6 +9,7 @@ import {
   validarRut,
   validarTelefono,
   validarTexto,
+  validarUsuario,
 } from "./validaciones.js";
 
 describe("validarRut (G-T1)", () => {
@@ -106,5 +107,25 @@ describe("validaciones, casos extra", () => {
     );
 
     expect(Object.keys(errores)).toEqual(["rut", "acepta"]);
+  });
+
+  it("validarUsuario exige nutricionista solo a ese rol y clave temporal solo al crear", () => {
+    const base = {
+      nombre: "Paula",
+      apellido: "Lagos",
+      rut: "11.111.111-1",
+      correo: "paula@nutrivida.cl",
+      telefono: "+56 9 3333 0001",
+      rol: "NUTRICIONISTA",
+      nutricionistaId: "",
+      clave: "",
+    };
+
+    expect(Object.keys(validarUsuario(base, { esNuevo: true }))).toEqual([
+      "nutricionistaId",
+      "clave",
+    ]);
+    expect(validarUsuario({ ...base, rol: "SECRETARIA" })).toEqual({});
+    expect(validarUsuario({ ...base, rol: "" }).rol).toBe("Selecciona un rol.");
   });
 });
