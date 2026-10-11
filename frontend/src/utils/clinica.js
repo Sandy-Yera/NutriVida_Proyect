@@ -136,3 +136,34 @@ export function describirDias(dias) {
   }
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
+
+export const MOTIVOS_CONTACTO = [
+  "Consulta general",
+  "Agendamiento de horas",
+  "Planes y precios",
+  "Talleres grupales",
+  "Otro",
+];
+
+export function validarContacto(datos) {
+  const errores = {};
+  const nombre = String(datos.nombre ?? "").trim();
+  if (!nombre) errores.nombre = "Ingresa tu nombre.";
+  else if (nombre.length < 2) errores.nombre = "El nombre debe tener al menos 2 caracteres.";
+  const correo = String(datos.correo ?? "").trim();
+  if (!correo) errores.correo = "Ingresa tu correo.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) {
+    errores.correo = "El correo no es válido: usa el formato nombre@dominio.cl.";
+  }
+  const telefono = String(datos.telefono ?? "").replace(/\s/g, "");
+  if (telefono && !/^\+569\d{8}$/.test(telefono)) {
+    errores.telefono = "El teléfono debe ser un celular chileno: +56 9 y 8 dígitos.";
+  }
+  if (!MOTIVOS_CONTACTO.includes(datos.motivo)) errores.motivo = "Elige el motivo de tu mensaje.";
+  const mensaje = String(datos.mensaje ?? "").trim();
+  if (!mensaje) errores.mensaje = "Escribe tu mensaje.";
+  else if (mensaje.length < 10 || mensaje.length > 500) {
+    errores.mensaje = "El mensaje debe tener entre 10 y 500 caracteres.";
+  }
+  return errores;
+}

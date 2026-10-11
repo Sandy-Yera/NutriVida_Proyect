@@ -8,6 +8,7 @@ import {
   pacientesDeNutricionista,
   tipoDesdeSlug,
   urlSolicitarCita,
+  validarContacto,
   validarMedicion,
 } from "./clinica.js";
 import { serviciosSemilla } from "../data/semillas/servicios.js";
@@ -107,5 +108,32 @@ describe("lógica clínica, casos extra", () => {
     expect(describirDias([5, 2, 4, 3])).toBe("Martes a viernes");
     expect(describirDias([1, 2])).toBe("Lunes y martes");
     expect(describirDias([3])).toBe("Miércoles");
+  });
+
+  it("validarContacto exige nombre, correo, motivo y un mensaje de 10 a 500 caracteres", () => {
+    expect(
+      validarContacto({
+        nombre: "Ana",
+        correo: "ana@correo.cl",
+        telefono: "",
+        motivo: "Otro",
+        mensaje: "Necesito más información.",
+      }),
+    ).toEqual({});
+    expect(
+      validarContacto({
+        nombre: "",
+        correo: "ana",
+        telefono: "1234",
+        motivo: "",
+        mensaje: "x".repeat(501),
+      }),
+    ).toEqual({
+      nombre: "Ingresa tu nombre.",
+      correo: "El correo no es válido: usa el formato nombre@dominio.cl.",
+      telefono: "El teléfono debe ser un celular chileno: +56 9 y 8 dígitos.",
+      motivo: "Elige el motivo de tu mensaje.",
+      mensaje: "El mensaje debe tener entre 10 y 500 caracteres.",
+    });
   });
 });

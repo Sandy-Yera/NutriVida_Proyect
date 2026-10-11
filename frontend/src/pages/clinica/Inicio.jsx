@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import MapaDiferido from "../../components/clinica/MapaDiferido.jsx";
 import ServicioFila from "../../components/clinica/ServicioFila.jsx";
 import { INFO_CLINICA, URL_COMO_LLEGAR } from "../../data/infoClinica.js";
 import { proximasHorasLibres } from "../../services/citasService.js";
@@ -231,34 +232,37 @@ export default function Inicio() {
 
       <section className="container pb-5" aria-labelledby="titulo-llegar">
         <div className="bg-white border rounded-3 p-3 p-md-4">
-          <div className="row g-3 align-items-center">
-            <div className="col-12 col-md-8">
+          <div className="row g-4 align-items-center">
+            <div className="col-12 col-lg-7">
+              <MapaDiferido alto={280} />
+            </div>
+            <div className="col-12 col-lg-5">
               <h2 id="titulo-llegar" className="h3">
                 Cómo llegar
               </h2>
               <p className="mb-1">
                 {INFO_CLINICA.direccion}, {INFO_CLINICA.region}.
               </p>
-              <ul className="list-unstyled small text-body-secondary mb-0">
+              <ul className="list-unstyled small text-body-secondary mb-3">
                 {INFO_CLINICA.horario.map((tramo) => (
                   <li key={tramo.dias}>
                     {tramo.dias}: {tramo.horas}
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="col-12 col-md-4 d-flex flex-wrap gap-2 justify-content-md-end">
-              <a
-                className="btn btn-primary"
-                href={URL_COMO_LLEGAR}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Cómo llegar
-              </a>
-              <Link className="btn btn-outline-primary" to="/contacto">
-                Ver mapa
-              </Link>
+              <div className="d-flex flex-wrap gap-2">
+                <a
+                  className="btn btn-primary"
+                  href={URL_COMO_LLEGAR}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Cómo llegar
+                </a>
+                <Link className="btn btn-outline-primary" to="/contacto">
+                  Escríbenos
+                </Link>
+              </div>
             </div>
           </div>
         </div>

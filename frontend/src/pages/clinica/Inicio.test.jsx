@@ -5,6 +5,9 @@ import Inicio from "./Inicio.jsx";
 import { proximasHorasLibres } from "../../services/citasService.js";
 
 vi.mock("../../services/citasService.js", () => ({ proximasHorasLibres: vi.fn() }));
+vi.mock("../../components/clinica/MapaDiferido.jsx", () => ({
+  default: () => <div data-testid="mapa" />,
+}));
 
 function SolicitarDePrueba() {
   const location = useLocation();
