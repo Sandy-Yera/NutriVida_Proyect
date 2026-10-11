@@ -96,3 +96,25 @@ h3 {
     transition: none !important;
   }
 }
+
+.navbar-dark {
+  --bs-navbar-color: rgba(255, 255, 255, 0.85);
+  --bs-navbar-hover-color: #fff;
+  --bs-navbar-active-color: #fff;
+}
+
+.navbar .nav-link.active {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+@media (min-width: 992px) {
+  .layout-admin-lateral {
+    position: sticky;
+    top: 0;
+    min-height: 100vh;
+    align-self: flex-start;
+  }
+}
