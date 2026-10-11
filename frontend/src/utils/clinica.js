@@ -119,3 +119,20 @@ export function incluyeDelPlan(descripcion) {
     .filter(Boolean)
     .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1));
 }
+
+const NOMBRES_DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+export function describirDias(dias) {
+  const ordenados = [...dias].sort((a, b) => a - b);
+  if (ordenados.length === 0) return "";
+  const consecutivos = ordenados.every((dia, i) => i === 0 || dia === ordenados[i - 1] + 1);
+  let texto;
+  if (consecutivos && ordenados.length >= 3) {
+    texto = `${NOMBRES_DIAS[ordenados[0]]} a ${NOMBRES_DIAS[ordenados.at(-1)]}`;
+  } else {
+    const nombres = ordenados.map((dia) => NOMBRES_DIAS[dia]);
+    texto =
+      nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(", ")} y ${nombres.at(-1)}`;
+  }
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}

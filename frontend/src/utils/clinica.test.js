@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calcularImc,
   clasificarImc,
+  describirDias,
   filtrarServicios,
   incluyeDelPlan,
   pacientesDeNutricionista,
@@ -97,5 +98,14 @@ describe("lógica clínica, casos extra", () => {
       ),
     ).toEqual(["Primera consulta", "5 controles", "3 planes mensuales", "Seguimiento continuo"]);
     expect(incluyeDelPlan("Plan adaptado para patologías metabólicas.")).toEqual([]);
+  });
+
+  it("describirDias escribe los días como en el XLSX", () => {
+    expect(describirDias([1, 3, 5])).toBe("Lunes, miércoles y viernes");
+    expect(describirDias([2, 4, 6])).toBe("Martes, jueves y sábado");
+    expect(describirDias([1, 2, 3, 4, 5])).toBe("Lunes a viernes");
+    expect(describirDias([5, 2, 4, 3])).toBe("Martes a viernes");
+    expect(describirDias([1, 2])).toBe("Lunes y martes");
+    expect(describirDias([3])).toBe("Miércoles");
   });
 });
