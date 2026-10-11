@@ -80,6 +80,13 @@ export const NOMBRE_TIPO_SERVICIO = {
   TALLER: "Talleres",
 };
 
+export const TIPO_SERVICIO_SINGULAR = {
+  CONSULTA: "Consulta",
+  PLAN: "Plan especializado",
+  EVALUACION: "Evaluación",
+  TALLER: "Taller grupal",
+};
+
 export const SLUG_TIPO_SERVICIO = {
   CONSULTA: "consultas",
   PLAN: "planes",
