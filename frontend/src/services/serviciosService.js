@@ -1,32 +1,40 @@
-import { serviciosSemilla } from "../data/semillas/servicios.js";
+import * as contactosData from "../data/contactosData.js";
+import * as serviciosData from "../data/serviciosData.js";
 import { nutricionistasSemilla } from "../data/semillas/nutricionistas.js";
 
-export async function listarServicios({ tipo, texto, soloActivos } = {}) {
-  return serviciosSemilla;
+export async function listarServicios({ tipo, texto, soloActivos = true } = {}) {
+  return serviciosData.listar({ tipo, texto, soloActivos });
 }
 
 export async function obtenerServicio(codigo) {
-  return serviciosSemilla.find((s) => s.codigo === codigo) ?? null;
+  return serviciosData.obtener(codigo);
 }
 
 export async function crearServicio(datos) {
-  return { ...datos, activo: true };
+  return serviciosData.crear(datos);
 }
 
 export async function actualizarServicio(codigo, cambios) {
-  const servicio = await obtenerServicio(codigo);
-  return { ...servicio, ...cambios };
+  return serviciosData.actualizar(codigo, cambios);
 }
 
 export async function cambiarEstadoServicio(codigo, activo) {
-  const servicio = await obtenerServicio(codigo);
-  return { ...servicio, activo };
+  return serviciosData.cambiarEstado(codigo, activo);
 }
 
 export async function listarNutricionistas() {
-  return nutricionistasSemilla;
+  return nutricionistasSemilla.map((nutricionista) => ({ ...nutricionista }));
 }
 
 export async function obtenerNutricionista(id) {
-  return nutricionistasSemilla.find((n) => n.id === id) ?? null;
+  const encontrado = nutricionistasSemilla.find((n) => n.id === id);
+  return encontrado ? { ...encontrado } : null;
+}
+
+export async function registrarContacto(datos) {
+  return contactosData.registrar(datos);
+}
+
+export async function listarContactos() {
+  return contactosData.listar();
 }
