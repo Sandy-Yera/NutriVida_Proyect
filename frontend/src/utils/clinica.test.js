@@ -22,6 +22,7 @@ import {
   validarFicha,
   validarMedicion,
   validarPlan,
+  validarServicio,
 } from "./clinica.js";
 import { serviciosSemilla } from "../data/semillas/servicios.js";
 import { fichasSemilla, medicionesSemilla, planesSemilla } from "../data/semillas/fichas.js";
@@ -263,5 +264,36 @@ describe("validarFicha y validarPlan", () => {
       once: "Indica la once.",
       cena: "Indica la cena.",
     });
+  });
+});
+
+describe("validarServicio", () => {
+  it("acepta cada servicio de la semilla tal como está", () => {
+    serviciosSemilla.forEach((servicio) => {
+      expect(validarServicio(servicio, { esNuevo: false })).toEqual({});
+    });
+  });
+
+  it("los planes no exigen duración, los talleres exigen cupo y el precio debe ser mayor que 0", () => {
+    const base = {
+      codigo: "pl007",
+      tipo: "PLAN",
+      nombre: "Plan embarazo",
+      duracionMin: "",
+      modalidad: "Presencial",
+      precio: "60000",
+      descripcion: "Incluye 3 consultas y plan mensual.",
+    };
+
+    expect(validarServicio(base)).toEqual({});
+    expect(validarServicio({ ...base, codigo: "P007", tipo: "TALLER", precio: "0" })).toEqual({
+      codigo: "El código debe tener 2 letras y 3 números, por ejemplo CN006.",
+      duracionMin: "La duración debe ser un número entero de 10 a 240 minutos.",
+      precio: "El precio debe ser mayor que 0.",
+      cupoMax: "El cupo debe ser un número entero de 1 a 50 personas.",
+    });
+    expect(validarServicio({ ...base, precio: "1500.5" }).precio).toBe(
+      "El precio va en pesos, sin decimales.",
+    );
   });
 });

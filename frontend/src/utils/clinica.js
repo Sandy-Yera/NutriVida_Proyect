@@ -379,3 +379,48 @@ export function validarPlan(datos) {
   });
   return errores;
 }
+
+export const MODALIDADES_SERVICIO = ["Presencial", "Online (video)", "Presencial (grupo)"];
+
+const FORMATO_CODIGO_SERVICIO = /^[A-Z]{2}\d{3}$/;
+
+function enteroEntre(valor, minimo, maximo) {
+  const numero = Number(valor);
+  return valor !== "" && Number.isInteger(numero) && numero >= minimo && numero <= maximo;
+}
+
+export function validarServicio(datos, { esNuevo = true } = {}) {
+  const errores = {};
+  if (esNuevo) {
+    const codigo = String(datos.codigo ?? "")
+      .trim()
+      .toUpperCase();
+    if (!FORMATO_CODIGO_SERVICIO.test(codigo)) {
+      errores.codigo = "El código debe tener 2 letras y 3 números, por ejemplo CN006.";
+    }
+  }
+  if (!NOMBRE_TIPO_SERVICIO[datos.tipo]) errores.tipo = "Elige el tipo de servicio.";
+  const nombre = String(datos.nombre ?? "").trim();
+  if (!nombre) errores.nombre = "Ingresa el nombre del servicio.";
+  else if (nombre.length < 3 || nombre.length > 80) {
+    errores.nombre = "El nombre debe tener entre 3 y 80 caracteres.";
+  }
+  if (datos.tipo !== "PLAN" && !enteroEntre(datos.duracionMin, 10, 240)) {
+    errores.duracionMin = "La duración debe ser un número entero de 10 a 240 minutos.";
+  }
+  if (!MODALIDADES_SERVICIO.includes(datos.modalidad)) errores.modalidad = "Elige la modalidad.";
+  const precio = Number(datos.precio);
+  if (datos.precio === "" || Number.isNaN(precio) || precio <= 0) {
+    errores.precio = "El precio debe ser mayor que 0.";
+  } else if (!Number.isInteger(precio)) {
+    errores.precio = "El precio va en pesos, sin decimales.";
+  }
+  const descripcion = String(datos.descripcion ?? "").trim();
+  if (descripcion.length < 10 || descripcion.length > 300) {
+    errores.descripcion = "La descripción debe tener entre 10 y 300 caracteres.";
+  }
+  if (datos.tipo === "TALLER" && !enteroEntre(datos.cupoMax, 1, 50)) {
+    errores.cupoMax = "El cupo debe ser un número entero de 1 a 50 personas.";
+  }
+  return errores;
+}

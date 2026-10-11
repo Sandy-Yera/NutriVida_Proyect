@@ -10,6 +10,7 @@ import Contacto from "../pages/clinica/Contacto.jsx";
 import MisPacientes from "../pages/clinica/MisPacientes.jsx";
 import FichaPaciente from "../pages/clinica/FichaPaciente.jsx";
 import AdminServicios from "../pages/clinica/admin/AdminServicios.jsx";
+import ServicioFormulario from "../pages/clinica/admin/ServicioFormulario.jsx";
 
 const MiProgreso = lazy(() => import("../pages/clinica/MiProgreso.jsx"));
 
@@ -60,5 +61,7 @@ export const rutasClinica = (
 export const rutasAdminClinica = (
   <>
     <Route path="servicios" element={<AdminServicios />} />
+    <Route path="servicios/nuevo" element={<ServicioFormulario />} />
+    <Route path="servicios/:codigo" element={<ServicioFormulario />} />
   </>
 );
