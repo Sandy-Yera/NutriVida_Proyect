@@ -3,6 +3,7 @@ import {
   calcularImc,
   clasificarImc,
   filtrarServicios,
+  incluyeDelPlan,
   pacientesDeNutricionista,
   tipoDesdeSlug,
   urlSolicitarCita,
@@ -87,5 +88,14 @@ describe("lógica clínica, casos extra", () => {
     expect(urlSolicitarCita()).toBe("/citas/solicitar");
     expect(tipoDesdeSlug("planes")).toBe("PLAN");
     expect(tipoDesdeSlug("otra")).toBeNull();
+  });
+
+  it("incluyeDelPlan separa lo que incluye un plan y no inventa ítems si no hay detalle", () => {
+    expect(
+      incluyeDelPlan(
+        "Incluye primera consulta + 5 controles + 3 planes mensuales + seguimiento continuo.",
+      ),
+    ).toEqual(["Primera consulta", "5 controles", "3 planes mensuales", "Seguimiento continuo"]);
+    expect(incluyeDelPlan("Plan adaptado para patologías metabólicas.")).toEqual([]);
   });
 });

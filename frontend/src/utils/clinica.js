@@ -107,3 +107,15 @@ export function urlSolicitarCita({ servicio, nutricionista } = {}) {
   const consulta = parametros.toString();
   return consulta ? `/citas/solicitar?${consulta}` : "/citas/solicitar";
 }
+
+export function incluyeDelPlan(descripcion) {
+  const texto = String(descripcion ?? "").trim();
+  if (!/^incluye\s/i.test(texto)) return [];
+  return texto
+    .replace(/^incluye\s+/i, "")
+    .replace(/\.$/, "")
+    .split("+")
+    .map((parte) => parte.trim())
+    .filter(Boolean)
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1));
+}
