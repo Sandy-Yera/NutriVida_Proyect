@@ -1,24 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
+  accesoFicha,
+  calcularEdad,
   calcularImc,
   clasificarImc,
   describirDias,
   diaDesdeFecha,
   dominioCinta,
+  filtrarPacientes,
   filtrarServicios,
   formatearMedida,
   incluyeDelPlan,
   marcasCinta,
   pacientesDeNutricionista,
+  pacientesSinFicha,
   proximaCita,
   serieProgreso,
   tipoDesdeSlug,
   urlSolicitarCita,
   validarContacto,
+  validarFicha,
   validarMedicion,
+  validarPlan,
 } from "./clinica.js";
 import { serviciosSemilla } from "../data/semillas/servicios.js";
-import { fichasSemilla, medicionesSemilla } from "../data/semillas/fichas.js";
+import { fichasSemilla, medicionesSemilla, planesSemilla } from "../data/semillas/fichas.js";
+import { usuariosSemilla } from "../data/semillas/usuarios.js";
 
 describe("calcularImc y clasificarImc (C-T1)", () => {
   it("calcularImc(72.4, 170) da 25.1 y clasificarImc(25.1) da Sobrepeso", () => {
@@ -197,5 +204,64 @@ describe("proximaCita", () => {
 
   it("ignora citas de otros pacientes, canceladas o que ya pasaron", () => {
     expect(proximaCita(citas.slice(0, 3), "U100", ahora)).toBeNull();
+  });
+});
+
+describe("privacidad y búsqueda de fichas", () => {
+  it("accesoFicha distingue ficha propia, ajena e inexistente", () => {
+    expect(accesoFicha(fichasSemilla[0], "NUT001")).toBe("PROPIA");
+    expect(accesoFicha(fichasSemilla[1], "NUT001")).toBe("AJENA");
+    expect(accesoFicha(null, "NUT001")).toBe("SIN_FICHA");
+  });
+
+  it("filtrarPacientes busca por nombre sin tildes y por RUT con o sin puntos", () => {
+    const pacientes = usuariosSemilla.filter((usuario) => usuario.rol === "PACIENTE");
+
+    expect(filtrarPacientes(pacientes, "huenchullan").map((p) => p.id)).toEqual(["U101"]);
+    expect(filtrarPacientes(pacientes, "21333444").map((p) => p.id)).toEqual(["U102"]);
+    expect(filtrarPacientes(pacientes, "19.876.543-0").map((p) => p.id)).toEqual(["U100"]);
+    expect(filtrarPacientes(pacientes, "  ")).toHaveLength(3);
+  });
+
+  it("pacientesSinFicha devuelve una vez a cada paciente con cita vigente y sin ficha", () => {
+    const citas = [
+      { pacienteId: "U102", nutricionistaId: "NUT003", estado: "PENDIENTE" },
+      { pacienteId: "U102", nutricionistaId: "NUT003", estado: "CONFIRMADA" },
+      { pacienteId: "U102", nutricionistaId: "NUT002", estado: "CANCELADA" },
+      { pacienteId: "U101", nutricionistaId: "NUT002", estado: "PENDIENTE" },
+    ];
+
+    expect(pacientesSinFicha(citas, fichasSemilla, "NUT003")).toEqual(["U102"]);
+    expect(pacientesSinFicha(citas, fichasSemilla, "NUT002")).toEqual([]);
+  });
+
+  it("calcularEdad cuenta el cumpleaños solo cuando ya pasó", () => {
+    expect(calcularEdad("1997-04-14", new Date(2026, 9, 11))).toBe(29);
+    expect(calcularEdad("2002-10-12", new Date(2026, 9, 11))).toBe(23);
+    expect(calcularEdad("2002-10-11", new Date(2026, 9, 11))).toBe(24);
+  });
+});
+
+describe("validarFicha y validarPlan", () => {
+  it("la ficha exige un objetivo del caso y antecedentes", () => {
+    expect(validarFicha({ objetivo: "OTRO", antecedentes: " " })).toEqual({
+      objetivo: "Elige el objetivo del paciente.",
+      antecedentes: "Ingresa los antecedentes (escribe “Sin antecedentes” si no tiene).",
+    });
+    expect(validarFicha({ objetivo: "INFANTIL", antecedentes: "Sin antecedentes" })).toEqual({});
+  });
+
+  it("el plan exige objetivo, kcal enteras de 800 a 5000 y las 5 comidas", () => {
+    expect(validarPlan(planesSemilla[0])).toEqual({});
+    expect(
+      validarPlan({ objetivo: "", kcalDiarias: "1800.5", comidas: { desayuno: "Avena" } }),
+    ).toEqual({
+      objetivo: "Ingresa el objetivo del plan.",
+      kcalDiarias: "Las kcal diarias deben ser un número entero entre 800 y 5000.",
+      colacion: "Indica la colación.",
+      almuerzo: "Indica el almuerzo.",
+      once: "Indica la once.",
+      cena: "Indica la cena.",
+    });
   });
 });

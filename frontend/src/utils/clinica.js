@@ -176,11 +176,11 @@ export const INDICADORES_PROGRESO = {
 };
 
 export const COMIDAS_PLAN = [
-  { clave: "desayuno", nombre: "Desayuno" },
-  { clave: "colacion", nombre: "Colación" },
-  { clave: "almuerzo", nombre: "Almuerzo" },
-  { clave: "once", nombre: "Once" },
-  { clave: "cena", nombre: "Cena" },
+  { clave: "desayuno", nombre: "Desayuno", articulo: "el" },
+  { clave: "colacion", nombre: "Colación", articulo: "la" },
+  { clave: "almuerzo", nombre: "Almuerzo", articulo: "el" },
+  { clave: "once", nombre: "Once", articulo: "la" },
+  { clave: "cena", nombre: "Cena", articulo: "la" },
 ];
 
 const MESES_CINTA = [
@@ -233,9 +233,15 @@ export function serieProgreso(mediciones, indicador) {
     .filter((punto) => punto.valor !== null);
 }
 
+const FORMATO_MEDIDAS = {
+  ...INDICADORES_PROGRESO,
+  TALLA: { nombre: "Talla", unidad: "cm", decimalesFijos: false },
+  CADERA: { nombre: "Cadera", unidad: "cm", decimalesFijos: false },
+};
+
 export function formatearMedida(valor, indicador, { conUnidad = false, conSigno = false } = {}) {
   if (valor === null || valor === undefined) return "—";
-  const { unidad, decimalesFijos } = INDICADORES_PROGRESO[indicador];
+  const { unidad, decimalesFijos } = FORMATO_MEDIDAS[indicador];
   const numero = new Intl.NumberFormat("es-CL", {
     minimumFractionDigits: decimalesFijos ? 1 : 0,
     maximumFractionDigits: 1,
@@ -302,4 +308,74 @@ export function proximaCita(citas, pacienteId, ahora = new Date()) {
   );
   vigentes.sort((a, b) => `${a.fecha}T${a.hora}`.localeCompare(`${b.fecha}T${b.hora}`));
   return vigentes[0] ?? null;
+}
+
+export function accesoFicha(ficha, nutricionistaId) {
+  if (!ficha) return "SIN_FICHA";
+  return ficha.nutricionistaId === nutricionistaId ? "PROPIA" : "AJENA";
+}
+
+export function calcularEdad(fechaNacimiento, hoy = new Date()) {
+  const nacimiento = aFechaLocal(fechaNacimiento);
+  const edad = hoy.getFullYear() - nacimiento.getFullYear();
+  const yaCumplio =
+    hoy.getMonth() > nacimiento.getMonth() ||
+    (hoy.getMonth() === nacimiento.getMonth() && hoy.getDate() >= nacimiento.getDate());
+  return yaCumplio ? edad : edad - 1;
+}
+
+function textoBuscable(texto) {
+  return quitarTildes(texto).replace(/[.-]/g, "");
+}
+
+export function filtrarPacientes(pacientes, texto) {
+  const buscado = textoBuscable(texto);
+  if (!buscado) return pacientes;
+  return pacientes.filter((paciente) =>
+    textoBuscable(`${paciente.nombre} ${paciente.apellido} ${paciente.rut}`).includes(buscado),
+  );
+}
+
+export function pacientesSinFicha(citas, fichas, nutricionistaId) {
+  const conFicha = new Set(fichas.map((ficha) => ficha.id));
+  const ids = citas
+    .filter(
+      (cita) =>
+        cita.nutricionistaId === nutricionistaId &&
+        cita.estado !== "CANCELADA" &&
+        !conFicha.has(cita.pacienteId),
+    )
+    .map((cita) => cita.pacienteId);
+  return [...new Set(ids)];
+}
+
+export function validarFicha(datos) {
+  const errores = {};
+  if (!OBJETIVOS_FICHA[datos.objetivo]) errores.objetivo = "Elige el objetivo del paciente.";
+  const antecedentes = String(datos.antecedentes ?? "").trim();
+  if (!antecedentes) {
+    errores.antecedentes = "Ingresa los antecedentes (escribe “Sin antecedentes” si no tiene).";
+  } else if (antecedentes.length > 500) {
+    errores.antecedentes = "Los antecedentes no pueden superar los 500 caracteres.";
+  }
+  return errores;
+}
+
+export function validarPlan(datos) {
+  const errores = {};
+  if (String(datos.objetivo ?? "").trim().length < 3) {
+    errores.objetivo = "Ingresa el objetivo del plan.";
+  }
+  const kcal = Number(datos.kcalDiarias);
+  if (datos.kcalDiarias === "" || datos.kcalDiarias === null || datos.kcalDiarias === undefined) {
+    errores.kcalDiarias = "Ingresa las kcal diarias.";
+  } else if (!Number.isInteger(kcal) || kcal < 800 || kcal > 5000) {
+    errores.kcalDiarias = "Las kcal diarias deben ser un número entero entre 800 y 5000.";
+  }
+  COMIDAS_PLAN.forEach(({ clave, nombre, articulo }) => {
+    if (!String(datos.comidas?.[clave] ?? "").trim()) {
+      errores[clave] = `Indica ${articulo} ${nombre.toLowerCase()}.`;
+    }
+  });
+  return errores;
 }

@@ -7,6 +7,8 @@ import DetalleServicio from "../pages/clinica/DetalleServicio.jsx";
 import Planes from "../pages/clinica/Planes.jsx";
 import Nosotros from "../pages/clinica/Nosotros.jsx";
 import Contacto from "../pages/clinica/Contacto.jsx";
+import MisPacientes from "../pages/clinica/MisPacientes.jsx";
+import FichaPaciente from "../pages/clinica/FichaPaciente.jsx";
 import AdminServicios from "../pages/clinica/admin/AdminServicios.jsx";
 
 const MiProgreso = lazy(() => import("../pages/clinica/MiProgreso.jsx"));
@@ -33,6 +35,22 @@ export const rutasClinica = (
           >
             <MiProgreso />
           </Suspense>
+        </RutaProtegida>
+      }
+    />
+    <Route
+      path="nutricionista/pacientes"
+      element={
+        <RutaProtegida roles={["NUTRICIONISTA"]}>
+          <MisPacientes />
+        </RutaProtegida>
+      }
+    />
+    <Route
+      path="nutricionista/pacientes/:pacienteId"
+      element={
+        <RutaProtegida roles={["NUTRICIONISTA"]}>
+          <FichaPaciente />
         </RutaProtegida>
       }
     />
