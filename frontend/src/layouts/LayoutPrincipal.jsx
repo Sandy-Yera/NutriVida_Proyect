@@ -5,6 +5,7 @@ import Footer from "../components/comunes/Footer.jsx";
 export default function LayoutPrincipal() {
   const location = useLocation();
   const mensaje = location.state?.mensaje;
+  const esExito = location.state?.tipo === "exito";
 
   return (
     <div className="d-flex flex-column min-vh-100">
@@ -12,7 +13,10 @@ export default function LayoutPrincipal() {
       <main className="flex-grow-1">
         {mensaje && (
           <div className="container pt-3">
-            <div className="alert alert-warning mb-0" role="alert">
+            <div
+              className={`alert mb-0 ${esExito ? "alert-success" : "alert-warning"}`}
+              role={esExito ? "status" : "alert"}
+            >
               {mensaje}
             </div>
           </div>
