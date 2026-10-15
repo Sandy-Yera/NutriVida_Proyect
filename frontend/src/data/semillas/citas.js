@@ -60,7 +60,7 @@ export const citasSemilla = [
     pacienteId: "U102",
     nutricionistaId: "NUT003",
     servicioCodigo: "CN001",
-    fecha: diaHabil(LV, 2),
+    fecha: diaHabil(L_V, 2),
     hora: "08:30",
     duracionMin: 50,
     motivo: "Quiero empezar una alimentación vegana",
