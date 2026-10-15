@@ -3,6 +3,6 @@ import { bloquesQueOcupa, puedeTransicionar } from "./citas.js";
 
 describe("bloquesQueOcupa", () => {
     it("muestra el precio en pesos chilenos con punto de miles", () => {
-        expect(bloquesQueOcupa("08:30", 38)).toBe("$35.000");
+        expect(bloquesQueOcupa("08:30", 38)).toEqual(["08:30", "09:00"]);
     });
 });
