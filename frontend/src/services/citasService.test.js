@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cambiarEstado,
+  crearCita,
   estadisticas,
   horariosDisponibles,
   listarCitas,
@@ -9,7 +10,7 @@ import {
   reprogramarCita,
 } from "./citasService.js";
 import { crear } from "../data/citasData.js";
-import { obtener as obtenerPago } from "../data/pagosData.js";
+import { crear as crearPago, obtener as obtenerPago } from "../data/pagosData.js";
 
 const ids = (citas) => citas.map((c) => c.id);
 
@@ -231,5 +232,70 @@ describe("citasService: proximasHorasLibres", () => {
       const [hh, mm] = h.hora.split(":").map(Number);
       expect(new Date(anio, mes - 1, dia, hh, mm).getTime()).toBeGreaterThan(Date.now());
     });
+  });
+});
+
+describe("citasService: crearCita (RN-35)", () => {
+  // CN002 (control) cuesta $25.000 y dura 30 min. 2030-01-08 es martes: Daniela atiende.
+  const solicitud = {
+    pacienteId: "U102",
+    nutricionistaId: "NUT003",
+    servicioCodigo: "CN002",
+    fecha: "2030-01-08",
+    hora: "09:00",
+    motivo: "Control mensual de peso",
+  };
+  const pagar = (cambios = {}) =>
+    crearPago({ monto: 25000, ultimos4: "4242", estado: "APROBADO", ...cambios });
+
+  it("crea la cita con un pago aprobado por el precio exacto y enlaza el pago", async () => {
+    const pago = pagar();
+    const cita = await crearCita({ ...solicitud, pagoId: pago.id });
+
+    expect(cita).toMatchObject({ estado: "PENDIENTE", pagoId: pago.id, duracionMin: 30 });
+    expect(obtenerPago(pago.id).citaId).toBe(cita.id);
+  });
+
+  it("toma la duración del catálogo, no la que manda la página", async () => {
+    const pago = pagar({ monto: 35000 });
+    const cita = await crearCita({
+      ...solicitud,
+      servicioCodigo: "CN001",
+      duracionMin: 5,
+      pagoId: pago.id,
+    });
+
+    expect(cita.duracionMin).toBe(50);
+  });
+
+  it("rechaza un monto distinto al precio del servicio", async () => {
+    const pago = pagar({ monto: 100 });
+
+    await expect(crearCita({ ...solicitud, pagoId: pago.id })).rejects.toThrow(
+      "El monto pagado no coincide",
+    );
+    expect(await listarCitas()).toHaveLength(5);
+  });
+
+  it("rechaza un pago rechazado, inexistente o ya usado", async () => {
+    const rechazado = pagar({ estado: "RECHAZADO", motivo: "El banco rechazó la tarjeta." });
+    await expect(crearCita({ ...solicitud, pagoId: rechazado.id })).rejects.toThrow(
+      "no fue aprobado",
+    );
+    await expect(crearCita({ ...solicitud, pagoId: "P9999" })).rejects.toThrow("pago registrado");
+
+    const pago = pagar();
+    await crearCita({ ...solicitud, pagoId: pago.id });
+    await expect(crearCita({ ...solicitud, hora: "10:00", pagoId: pago.id })).rejects.toThrow(
+      "ya está asociado",
+    );
+  });
+
+  it("rechaza un servicio que no existe", async () => {
+    const pago = pagar();
+
+    await expect(
+      crearCita({ ...solicitud, servicioCodigo: "XX999", pagoId: pago.id }),
+    ).rejects.toThrow("no está disponible");
   });
 });

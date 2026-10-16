@@ -1,7 +1,7 @@
 import * as citasData from "../data/citasData.js";
 import * as pagosData from "../data/pagosData.js";
 import * as citasUtils from "../utils/citas.js";
-import { listarNutricionistas, obtenerNutricionista } from "./serviciosService.js";
+import { listarNutricionistas, obtenerNutricionista, obtenerServicio } from "./serviciosService.js";
 
 export async function listarCitas({ pacienteId, nutricionistaId, estado, desde, hasta } = {}) {
   const citas = await citasData.listar();
@@ -12,8 +12,23 @@ export async function obtenerCita(id) {
   return citasData.obtener(id);
 }
 
+// RN-35: una cita solo se crea con un pago APROBADO, por el precio exacto del servicio,
+// y que no esté asociado a otra cita. Después de crearla, el pago queda enlazado a ella.
 export async function crearCita(datos) {
-  return citasData.crear(datos);
+  const [pago, servicio] = await Promise.all([
+    pagosData.obtener(datos.pagoId),
+    obtenerServicio(datos.servicioCodigo),
+  ]);
+  if (!servicio || !servicio.activo) throw new Error("El servicio elegido no está disponible.");
+  if (!pago) throw new Error("La cita necesita un pago registrado.");
+  if (pago.estado !== "APROBADO") throw new Error("El pago no fue aprobado.");
+  if (pago.citaId) throw new Error("Ese pago ya está asociado a otra cita.");
+  if (pago.monto !== servicio.precio) {
+    throw new Error("El monto pagado no coincide con el precio del servicio.");
+  }
+  const cita = citasData.crear({ ...datos, duracionMin: servicio.duracionMin });
+  pagosData.actualizar(pago.id, { citaId: cita.id });
+  return cita;
 }
 
 // RN-08: al cancelar, el pago de la cita pasa a REEMBOLSADO.
