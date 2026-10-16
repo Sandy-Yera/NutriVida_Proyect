@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cambiarEstado,
   crearCita,
@@ -7,12 +7,24 @@ import {
   listarCitas,
   obtenerCita,
   proximasHorasLibres,
+  puedeAgendarTeleconsulta,
   reprogramarCita,
 } from "./citasService.js";
 import { crear } from "../data/citasData.js";
 import { crear as crearPago, obtener as obtenerPago } from "../data/pagosData.js";
 
 const ids = (citas) => citas.map((c) => c.id);
+
+// RN-13 y RN-30: crearCita y reprogramarCita usan la fecha de hoy. Se fija el reloj (solo Date)
+// para que las pruebas den lo mismo cualquier día en que se corran.
+function fijarReloj(anio, mes, dia, hora = 8, minuto = 0) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(anio, mes - 1, dia, hora, minuto));
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("citasService: listarCitas", () => {
   it("sin filtros devuelve todas las citas ordenadas por fecha y hora", async () => {
@@ -37,6 +49,7 @@ describe("citasService: listarCitas", () => {
       pacienteId: "U102",
       nutricionistaId: "NUT003",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-03-04",
       hora: "09:00",
     });
@@ -44,6 +57,7 @@ describe("citasService: listarCitas", () => {
       pacienteId: "U102",
       nutricionistaId: "NUT003",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-03-06",
       hora: "09:00",
     });
@@ -62,6 +76,7 @@ describe("citasService: listarCitas", () => {
       pacienteId: "U101",
       nutricionistaId: "NUT003",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-01-10",
       hora: "08:00",
     });
@@ -106,11 +121,24 @@ describe("citasService: cambiarEstado", () => {
 });
 
 describe("citasService: reprogramarCita", () => {
+  // Hoy fingido: lunes 28 de enero de 2030. El 1 de febrero (viernes) atiende Carolina (NUT001).
+  beforeEach(() => fijarReloj(2030, 1, 28));
+
   it("mueve la cita, la deja PENDIENTE y anota quién la reprogramó", async () => {
     const cita = await reprogramarCita("C0003", "2030-02-01", "11:30", "U100");
 
     expect(cita).toMatchObject({ fecha: "2030-02-01", hora: "11:30", estado: "PENDIENTE" });
     expect(cita.historial.at(-1)).toMatchObject({ de: "CONFIRMADA", a: "PENDIENTE", por: "U100" });
+  });
+
+  it("no mueve la cita fuera de la jornada ni más allá de 60 días (RN-09, RN-13)", async () => {
+    await expect(reprogramarCita("C0003", "2030-02-01", "18:00", "U100")).rejects.toThrow(
+      "no está disponible",
+    );
+    await expect(reprogramarCita("C0003", "2030-04-05", "11:30", "U100")).rejects.toThrow(
+      "60 días",
+    );
+    expect((await obtenerCita("C0003")).estado).toBe("CONFIRMADA");
   });
 
   it("no reprograma una cita cancelada", async () => {
@@ -147,6 +175,7 @@ describe("citasService: estadisticas", () => {
       pacienteId: "U102",
       nutricionistaId: "NUT003",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-01-08",
       hora: "09:00",
     });
@@ -154,6 +183,7 @@ describe("citasService: estadisticas", () => {
       pacienteId: "U101",
       nutricionistaId: "NUT002",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-02-05",
       hora: "09:00",
     });
@@ -172,6 +202,7 @@ describe("citasService: estadisticas", () => {
       pacienteId: "U102",
       nutricionistaId: "NUT003",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-03-05",
       hora: "09:00",
     });
@@ -192,6 +223,7 @@ describe("citasService: horariosDisponibles", () => {
       pacienteId: "U102",
       nutricionistaId: "NUT003",
       servicioCodigo: "CN002",
+      motivo: "Control mensual de peso",
       fecha: "2030-01-07",
       hora: "09:00",
       duracionMin: 30,
@@ -248,6 +280,9 @@ describe("citasService: crearCita (RN-35)", () => {
   const pagar = (cambios = {}) =>
     crearPago({ monto: 25000, ultimos4: "4242", estado: "APROBADO", ...cambios });
 
+  // Hoy fingido: domingo 6 de enero de 2030, así el martes 8 queda dentro de los 60 días.
+  beforeEach(() => fijarReloj(2030, 1, 6));
+
   it("crea la cita con un pago aprobado por el precio exacto y enlaza el pago", async () => {
     const pago = pagar();
     const cita = await crearCita({ ...solicitud, pagoId: pago.id });
@@ -297,5 +332,99 @@ describe("citasService: crearCita (RN-35)", () => {
     await expect(
       crearCita({ ...solicitud, servicioCodigo: "XX999", pagoId: pago.id }),
     ).rejects.toThrow("no está disponible");
+  });
+});
+
+describe("citasService: crearCita repite las reglas del asistente", () => {
+  const solicitud = {
+    pacienteId: "U102",
+    nutricionistaId: "NUT003",
+    servicioCodigo: "CN002",
+    fecha: "2030-01-08",
+    hora: "09:00",
+    motivo: "Control mensual de peso",
+  };
+  const pagar = (monto = 25000) => crearPago({ monto, ultimos4: "4242", estado: "APROBADO" });
+
+  beforeEach(() => fijarReloj(2030, 1, 6));
+
+  it("rechaza una fecha pasada o a más de 60 días (RN-13)", async () => {
+    await expect(
+      crearCita({ ...solicitud, fecha: "2030-01-04", pagoId: pagar().id }),
+    ).rejects.toThrow("ya pasó");
+    await expect(
+      crearCita({ ...solicitud, fecha: "2030-03-08", pagoId: pagar().id }),
+    ).rejects.toThrow("60 días");
+  });
+
+  it("rechaza una hora fuera de la jornada del nutricionista (RN-09)", async () => {
+    // Daniela atiende de 08:00 a 13:00.
+    await expect(crearCita({ ...solicitud, hora: "14:00", pagoId: pagar().id })).rejects.toThrow(
+      "no está disponible",
+    );
+  });
+
+  it("rechaza una hora de hoy que ya pasó (RN-12)", async () => {
+    fijarReloj(2030, 1, 8, 10, 15);
+
+    await expect(crearCita({ ...solicitud, pagoId: pagar().id })).rejects.toThrow(
+      "no está disponible",
+    );
+  });
+
+  it("rechaza una consulta de 50 min que no cabe al final de la jornada (RN-11)", async () => {
+    await expect(
+      crearCita({ ...solicitud, servicioCodigo: "CN001", hora: "12:30", pagoId: pagar(35000).id }),
+    ).rejects.toThrow("no está disponible");
+  });
+
+  it("rechaza un motivo de menos de 10 caracteres (RN-14)", async () => {
+    await expect(
+      crearCita({ ...solicitud, motivo: "  Dieta  ", pagoId: pagar().id }),
+    ).rejects.toThrow("al menos 10");
+  });
+
+  it("solo agenda teleconsulta a quien ya tuvo una atención presencial (RN-16)", async () => {
+    // Ana (U102) no tiene atenciones; Javiera (U100) tiene la C0001 ATENDIDA.
+    await expect(
+      crearCita({ ...solicitud, servicioCodigo: "CN004", pagoId: pagar(20000).id }),
+    ).rejects.toThrow("consulta presencial");
+
+    const cita = await crearCita({
+      ...solicitud,
+      pacienteId: "U100",
+      servicioCodigo: "CN004",
+      pagoId: pagar(20000).id,
+    });
+    expect(cita.servicioCodigo).toBe("CN004");
+  });
+
+  it("no deja el pago enlazado si la cita no se creó", async () => {
+    const pago = pagar();
+
+    await expect(crearCita({ ...solicitud, hora: "14:00", pagoId: pago.id })).rejects.toThrow();
+    expect(obtenerPago(pago.id).citaId).toBeFalsy();
+  });
+});
+
+describe("citasService: puedeAgendarTeleconsulta (RN-16)", () => {
+  it("es verdadero con una atención presencial previa y falso sin ella", async () => {
+    expect(await puedeAgendarTeleconsulta("U100")).toBe(true);
+    expect(await puedeAgendarTeleconsulta("U102")).toBe(false);
+  });
+
+  it("una teleconsulta atendida no habilita otra", async () => {
+    const tele = crear({
+      pacienteId: "U102",
+      nutricionistaId: "NUT003",
+      servicioCodigo: "CN004",
+      motivo: "Seguimiento por video",
+      fecha: "2030-01-08",
+      hora: "09:00",
+    });
+    await cambiarEstado(tele.id, "CONFIRMADA", "U002");
+    await cambiarEstado(tele.id, "ATENDIDA", "U012");
+
+    expect(await puedeAgendarTeleconsulta("U102")).toBe(false);
   });
 });

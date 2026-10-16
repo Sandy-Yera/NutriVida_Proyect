@@ -1,7 +1,7 @@
 import { guardar, leer } from "./almacen.js";
 import { citasSemilla } from "./semillas/citas.js";
 import { aFechaIso } from "../utils/formato.js";
-import { chocaConOtraCita, puedeTransicionar } from "../utils/citas.js";
+import { chocaConOtraCita, puedeTransicionar, validarMotivo } from "../utils/citas.js";
 
 const CLAVE = "nv_citas";
 const FORMATO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,6 +25,12 @@ function validarFechaHora(fecha, hora) {
   if (!FORMATO_HORA.test(String(hora ?? ""))) {
     throw new Error("La hora de la cita debe tener el formato HH:mm.");
   }
+}
+
+// RN-14: la regla vive en utils (la usa también el asistente); aquí se convierte en Error.
+function exigirMotivo(motivo) {
+  const error = validarMotivo(motivo);
+  if (error) throw new Error(error);
 }
 
 function validarHorarioLibre(citas, cita, idExcluido = null) {
@@ -57,12 +63,13 @@ export function obtener(id) {
   return leer(CLAVE, citasSemilla).find((c) => c.id === id) ?? null;
 }
 
-// RN-03: toda cita nace PENDIENTE. RN-10: no puede ocupar un horario ya tomado.
+// RN-03: toda cita nace PENDIENTE. RN-10: no puede ocupar un horario ya tomado. RN-14: motivo.
 export function crear(datos) {
   if (!datos.pacienteId || !datos.nutricionistaId || !datos.servicioCodigo) {
     throw new Error("Faltan datos de la cita: paciente, nutricionista y servicio.");
   }
   validarFechaHora(datos.fecha, datos.hora);
+  exigirMotivo(datos.motivo);
   const citas = leer(CLAVE, citasSemilla);
   const nueva = {
     id: siguienteId(citas),
@@ -132,5 +139,9 @@ export function actualizar(id, cambios) {
   const permitidos = { ...cambios };
   delete permitidos.id;
   delete permitidos.creadaEn;
+  if ("motivo" in permitidos) {
+    exigirMotivo(permitidos.motivo);
+    permitidos.motivo = String(permitidos.motivo).trim();
+  }
   return reemplazar(citas, indice, { ...citas[indice], ...permitidos });
 }

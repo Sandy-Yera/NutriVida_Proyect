@@ -142,6 +142,20 @@ describe("citasData: reprogramar sin choques", () => {
   });
 });
 
+describe("citasData: motivo (RN-14)", () => {
+  it("rechaza un motivo vacío, corto o de más de 300 caracteres", () => {
+    expect(() => crear({ ...datos, motivo: undefined })).toThrow("al menos 10");
+    expect(() => crear({ ...datos, motivo: "   corto   " })).toThrow("al menos 10");
+    expect(() => crear({ ...datos, motivo: "a".repeat(301) })).toThrow("como máximo 300");
+    expect(listar()).toHaveLength(5);
+  });
+
+  it("acepta los extremos: 10 y 300 caracteres", () => {
+    expect(crear({ ...datos, motivo: "a".repeat(10) }).motivo).toHaveLength(10);
+    expect(crear({ ...datos, hora: "11:00", motivo: "a".repeat(300) }).motivo).toHaveLength(300);
+  });
+});
+
 describe("citasData: actualizar", () => {
   it("actualiza otros campos sin permitir cambiar el id ni la fecha de creación", () => {
     const original = obtener("C0004");
@@ -167,6 +181,13 @@ describe("citasData: actualizar", () => {
 
   it("no permite cambiar fecha ni hora por esta vía", () => {
     expect(() => actualizar("C0004", { hora: "12:00" })).toThrow("reprogramar");
+  });
+
+  it("valida y limpia el motivo también al actualizarlo (RN-14)", () => {
+    expect(() => actualizar("C0004", { motivo: "corto" })).toThrow("al menos 10");
+    expect(actualizar("C0004", { motivo: "  Control de seguimiento  " }).motivo).toBe(
+      "Control de seguimiento",
+    );
   });
 
   it("lanza un error al actualizar una cita que no existe", () => {

@@ -24,3 +24,10 @@ export async function procesarPago({ titular, numero, vencimiento, cvv, monto })
 export async function obtenerPago(id) {
   return pagosData.obtener(id);
 }
+
+// Para la vista del admin (S-08): todos los pagos, o solo los de ciertas citas.
+// Es una función nueva: no cambia el contrato.
+export async function listarPagos({ citaIds } = {}) {
+  const pagos = pagosData.listar();
+  return citaIds ? pagos.filter((p) => citaIds.includes(p.citaId)) : pagos;
+}

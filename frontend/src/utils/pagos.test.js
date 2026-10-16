@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   pasaLuhn,
   simularPago,
+  totalRecaudado,
   validarCvv,
   validarPago,
   validarTarjeta,
@@ -87,5 +88,18 @@ describe("simularPago", () => {
 
   it("aprueba cualquier otra tarjeta", () => {
     expect(simularPago("4242424242424242")).toEqual({ estado: "APROBADO", motivo: null });
+  });
+});
+
+describe("totalRecaudado (RN-27)", () => {
+  it("suma solo los pagos aprobados", () => {
+    const pagos = [
+      { monto: 35000, estado: "APROBADO" },
+      { monto: 25000, estado: "REEMBOLSADO" },
+      { monto: 20000, estado: "RECHAZADO" },
+      { monto: 12000, estado: "APROBADO" },
+    ];
+    expect(totalRecaudado(pagos)).toBe(47000);
+    expect(totalRecaudado([])).toBe(0);
   });
 });

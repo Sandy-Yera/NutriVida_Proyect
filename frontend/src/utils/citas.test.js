@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ETIQUETAS_ESTADO,
   TRANSICIONES,
   agruparPorNutricionista,
   agruparPorSemana,
@@ -10,11 +11,15 @@ import {
   filtrarCitas,
   generarBloques,
   horariosDisponibles,
+  horasNoElegibles,
   lunesDeLaSemana,
   necesitaRecordatorio,
   puedeAgendarTeleconsulta,
   puedeCancelar,
   puedeTransicionar,
+  separarProximasEHistorial,
+  validarFechaCita,
+  validarMotivo,
 } from "./citas.js";
 
 // Horarios del catálogo (hoja "Nutricionistas"). 2026-10-12 es lunes.
@@ -470,5 +475,77 @@ describe("buscarProximasHorasLibres", () => {
   it("devuelve una lista vacía si la cantidad es 0 o no hay nutricionistas", () => {
     expect(buscarProximasHorasLibres(todos, [], LUNES_7AM, 0)).toEqual([]);
     expect(buscarProximasHorasLibres([], [], LUNES_7AM, 4)).toEqual([]);
+  });
+});
+
+describe("validarMotivo (RN-14)", () => {
+  it("exige entre 10 y 300 caracteres sin contar los espacios de los extremos", () => {
+    expect(validarMotivo("a".repeat(9))).toMatch("al menos 10");
+    expect(validarMotivo("    corto     ")).toMatch("al menos 10");
+    expect(validarMotivo(undefined)).toMatch("al menos 10");
+    expect(validarMotivo("a".repeat(10))).toBe("");
+    expect(validarMotivo("a".repeat(300))).toBe("");
+    expect(validarMotivo("a".repeat(301))).toMatch("como máximo 300");
+  });
+});
+
+describe("validarFechaCita (RN-13)", () => {
+  const ahora = new Date(2026, 9, 16, 18, 0); // viernes 16 de octubre de 2026, 18:00
+
+  it("acepta desde hoy hasta 60 días adelante, extremos incluidos", () => {
+    expect(validarFechaCita("2026-10-16", ahora)).toBe("");
+    expect(validarFechaCita("2026-12-15", ahora)).toBe("");
+  });
+
+  it("rechaza una fecha pasada o a más de 60 días", () => {
+    expect(validarFechaCita("2026-10-15", ahora)).toMatch("ya pasó");
+    expect(validarFechaCita("2026-12-16", ahora)).toMatch("60 días");
+  });
+
+  it("rechaza una fecha con otro formato", () => {
+    expect(validarFechaCita("16/10/2026", ahora)).toMatch("AAAA-MM-DD");
+  });
+
+  it("no se corre con el cambio de horario de abril", () => {
+    // De 2027-03-20 a 2027-05-19 hay 60 días de calendario, pero 60 días y 1 hora en milisegundos.
+    expect(validarFechaCita("2027-05-19", new Date(2027, 2, 20, 9, 0))).toBe("");
+  });
+});
+
+describe("ETIQUETAS_ESTADO (RN-01)", () => {
+  it("tiene un texto para cada estado de TRANSICIONES", () => {
+    expect(Object.keys(ETIQUETAS_ESTADO).sort()).toEqual(Object.keys(TRANSICIONES).sort());
+  });
+});
+
+describe("horasNoElegibles", () => {
+  it("devuelve los bloques de la jornada que no están entre los disponibles", () => {
+    expect(horasNoElegibles(["08:00", "08:30", "09:00"], ["08:00"])).toEqual(["08:30", "09:00"]);
+    expect(horasNoElegibles([], [])).toEqual([]);
+  });
+});
+
+describe("separarProximasEHistorial (S-05)", () => {
+  const ahora = new Date(2026, 9, 16, 12, 0);
+  const cita = (id, fecha, hora, estado) => ({ id, fecha, hora, estado });
+  const citas = [
+    cita("A", "2026-10-20", "09:00", "PENDIENTE"),
+    cita("B", "2026-10-17", "10:00", "CONFIRMADA"),
+    cita("C", "2026-10-10", "10:00", "ATENDIDA"),
+    cita("D", "2026-10-25", "10:00", "CANCELADA"),
+    cita("E", "2026-10-16", "11:00", "CONFIRMADA"),
+  ];
+
+  it("próximas: pendientes o confirmadas que no han empezado, de la más cercana a la más lejana", () => {
+    expect(separarProximasEHistorial(citas, ahora).proximas.map((c) => c.id)).toEqual(["B", "A"]);
+  });
+
+  it("historial: lo demás, de la más reciente a la más antigua", () => {
+    // E ya empezó (11:00 < 12:00) y D se canceló aunque su fecha sea futura.
+    expect(separarProximasEHistorial(citas, ahora).historial.map((c) => c.id)).toEqual([
+      "D",
+      "E",
+      "C",
+    ]);
   });
 });

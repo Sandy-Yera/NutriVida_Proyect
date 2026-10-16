@@ -82,3 +82,9 @@ export function simularPago(numero) {
   }
   return { estado: "APROBADO", motivo: null };
 }
+
+// RN-27 (admin): total recaudado. Solo suman los pagos APROBADOS: un rechazo nunca se cobró
+// y un reembolso se devolvió.
+export function totalRecaudado(pagos) {
+  return pagos.filter((p) => p.estado === "APROBADO").reduce((suma, p) => suma + p.monto, 0);
+}

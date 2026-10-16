@@ -1,7 +1,12 @@
-import { aFechaIso, aFechaLocal } from "./formato.js";
+import { aFechaIso, aFechaLocal, formatearFechaLarga } from "./formato.js";
 
 const MS_24_HORAS = 24 * 60 * 60 * 1000;
 const DURACION_BLOQUE = 30;
+const FORMATO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+export const DIAS_ANTICIPACION = 60;
+export const MOTIVO_MIN = 10;
+export const MOTIVO_MAX = 300;
 
 // RN-01 y RN-02: estados de una cita y transiciones permitidas.
 // ATENDIDA, CANCELADA e INASISTENCIA son finales. Reprogramar no es una transición:
@@ -12,6 +17,15 @@ export const TRANSICIONES = {
   ATENDIDA: [],
   CANCELADA: [],
   INASISTENCIA: [],
+};
+
+// RN-01: texto que acompaña al color de cada estado (ChipEstado, agendas y tablas).
+export const ETIQUETAS_ESTADO = {
+  PENDIENTE: "Pendiente",
+  CONFIRMADA: "Confirmada",
+  ATENDIDA: "Atendida",
+  CANCELADA: "Cancelada",
+  INASISTENCIA: "Inasistencia",
 };
 
 // RN-10: solo estas citas ocupan horario en la agenda.
@@ -97,6 +111,12 @@ export function horariosDisponibles(nutricionista, fecha, citas, duracionMin, ah
   });
 }
 
+// Para SelectorHorario: de todos los bloques de la jornada, los que no se pueden elegir
+// (tomados, pasados o donde el servicio no cabe). Es la prop "ocupados" del plan.
+export function horasNoElegibles(horarios, disponibles) {
+  return horarios.filter((hora) => !disponibles.includes(hora));
+}
+
 export function puedeTransicionar(actual, nuevo) {
   return (TRANSICIONES[actual] ?? []).includes(nuevo);
 }
@@ -121,6 +141,27 @@ export function puedeAgendarTeleconsulta(citasDelPaciente, codigosNoPresenciales
   return citasDelPaciente.some(
     (cita) => cita.estado === "ATENDIDA" && !codigosNoPresenciales.includes(cita.servicioCodigo),
   );
+}
+
+// RN-14: el motivo, ya sin espacios al inicio ni al final, tiene entre 10 y 300 caracteres.
+export function validarMotivo(motivo) {
+  const largo = String(motivo ?? "").trim().length;
+  if (largo < MOTIVO_MIN) return `El motivo debe tener al menos ${MOTIVO_MIN} caracteres.`;
+  if (largo > MOTIVO_MAX) return `El motivo puede tener como máximo ${MOTIVO_MAX} caracteres.`;
+  return "";
+}
+
+// RN-13: se agenda desde hoy hasta 60 días adelante. Se compara como texto "AAAA-MM-DD"
+// para no depender de las horas (un cambio de horario de verano no corre el límite).
+export function validarFechaCita(fecha, ahora) {
+  if (!FORMATO_FECHA.test(String(fecha ?? ""))) return "La fecha debe tener el formato AAAA-MM-DD.";
+  const hoy = aFechaIso(ahora);
+  const limite = sumarDias(hoy, DIAS_ANTICIPACION);
+  if (fecha < hoy) return "Esa fecha ya pasó. Elige una desde hoy.";
+  if (fecha > limite) {
+    return `Solo se puede agendar hasta ${DIAS_ANTICIPACION} días adelante (hasta el ${formatearFechaLarga(limite)}).`;
+  }
+  return "";
 }
 
 // Filtros opcionales: si no se pasa uno, no restringe. Fechas en texto "AAAA-MM-DD".
@@ -216,4 +257,15 @@ export function buscarProximasHorasLibres(
     fecha = sumarDias(fecha, 1);
   }
   return encontradas.slice(0, Math.max(0, cantidad));
+}
+
+// S-05 Mis citas: "Próximas" son las que aún ocupan agenda y no han empezado (de la más cercana
+// a la más lejana). "Historial" es todo lo demás, de la más reciente a la más antigua.
+export function separarProximasEHistorial(citas, ahora) {
+  const ordenadas = filtrarCitas(citas);
+  const esProxima = (c) => ESTADOS_QUE_OCUPAN.includes(c.estado) && inicioDeCita(c) > ahora;
+  return {
+    proximas: ordenadas.filter(esProxima),
+    historial: ordenadas.filter((c) => !esProxima(c)).reverse(),
+  };
 }

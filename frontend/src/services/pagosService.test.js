@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { obtenerPago, procesarPago } from "./pagosService.js";
+import { listarPagos, obtenerPago, procesarPago } from "./pagosService.js";
 import { listar } from "../data/pagosData.js";
 
 const tarjeta = {
@@ -64,5 +64,13 @@ describe("pagosService: obtenerPago", () => {
     const { pagoId } = await procesarPago(tarjeta);
     expect(await obtenerPago(pagoId)).not.toBeNull();
     expect(await obtenerPago("P9999")).toBeNull();
+  });
+});
+
+describe("pagosService: listarPagos", () => {
+  it("devuelve todos los pagos o solo los de las citas pedidas", async () => {
+    expect(await listarPagos()).toHaveLength(5);
+    const deDos = await listarPagos({ citaIds: ["C0001", "C0003"] });
+    expect(deDos.map((p) => p.citaId).sort()).toEqual(["C0001", "C0003"]);
   });
 });
