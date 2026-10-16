@@ -8,7 +8,6 @@ function diaHabil(dias, n) {
 }
 
 const L_V = [1, 2, 3, 4, 5];
-const M_V = [2, 3, 4, 5];
 const LMV = [1, 3, 5];
 const MJS = [2, 4, 6];
 

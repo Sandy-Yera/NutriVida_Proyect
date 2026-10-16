@@ -21,8 +21,14 @@ export const rutasCitas = (
     <Route path="citas/pago/exito/:citaId" element={protegida(["PACIENTE"], <PagoExitoso />)} />
     <Route path="citas/pago/error" element={protegida(["PACIENTE"], <PagoError />)} />
     <Route path="mis-citas" element={protegida(["PACIENTE"], <MisCitas />)} />
-    <Route path="secretaria/agenda" element={protegida(["SECRETARIA", "ADMIN"], <AgendaSecretaria />)} />
-    <Route path="nutricionista/agenda" element={protegida(["NUTRICIONISTA"], <AgendaNutricionista />)} />
+    <Route
+      path="secretaria/agenda"
+      element={protegida(["SECRETARIA", "ADMIN"], <AgendaSecretaria />)}
+    />
+    <Route
+      path="nutricionista/agenda"
+      element={protegida(["NUTRICIONISTA"], <AgendaNutricionista />)}
+    />
   </>
 );
 
