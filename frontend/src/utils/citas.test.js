@@ -16,7 +16,9 @@ import {
   necesitaRecordatorio,
   puedeAgendarTeleconsulta,
   puedeCancelar,
+  primerPasoIncompleto,
   puedeTransicionar,
+  rangoFechasCita,
   separarProximasEHistorial,
   validarFechaCita,
   validarMotivo,
@@ -547,5 +549,38 @@ describe("separarProximasEHistorial (S-05)", () => {
       "E",
       "C",
     ]);
+  });
+});
+
+describe("rangoFechasCita (RN-13)", () => {
+  it("va de hoy a hoy + 60 días, en texto AAAA-MM-DD", () => {
+    expect(rangoFechasCita(new Date(2026, 9, 16, 18, 0))).toEqual({
+      desde: "2026-10-16",
+      hasta: "2026-12-15",
+    });
+  });
+});
+
+describe("primerPasoIncompleto (RN-17)", () => {
+  it("devuelve el primer paso que falta completar", () => {
+    expect(primerPasoIncompleto({})).toBe(1);
+    expect(primerPasoIncompleto({ nutricionistaId: "NUT003" })).toBe(1);
+    expect(primerPasoIncompleto({ servicioCodigo: "CN001" })).toBe(2);
+    expect(primerPasoIncompleto({ servicioCodigo: "CN001", nutricionistaId: "NUT003" })).toBe(3);
+    expect(
+      primerPasoIncompleto({
+        servicioCodigo: "CN001",
+        nutricionistaId: "NUT003",
+        fecha: "2026-10-20",
+      }),
+    ).toBe(3);
+    expect(
+      primerPasoIncompleto({
+        servicioCodigo: "CN001",
+        nutricionistaId: "NUT003",
+        fecha: "2026-10-20",
+        hora: "09:00",
+      }),
+    ).toBe(4);
   });
 });

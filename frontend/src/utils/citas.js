@@ -151,17 +151,32 @@ export function validarMotivo(motivo) {
   return "";
 }
 
-// RN-13: se agenda desde hoy hasta 60 días adelante. Se compara como texto "AAAA-MM-DD"
-// para no depender de las horas (un cambio de horario de verano no corre el límite).
+// RN-13: se agenda desde hoy hasta 60 días adelante, en texto "AAAA-MM-DD".
+// El asistente lo usa para el min y el max del calendario.
+export function rangoFechasCita(ahora) {
+  const desde = aFechaIso(ahora);
+  return { desde, hasta: sumarDias(desde, DIAS_ANTICIPACION) };
+}
+
+// RN-13: se compara como texto "AAAA-MM-DD" para no depender de las horas
+// (un cambio de horario de verano no corre el límite).
 export function validarFechaCita(fecha, ahora) {
   if (!FORMATO_FECHA.test(String(fecha ?? ""))) return "La fecha debe tener el formato AAAA-MM-DD.";
-  const hoy = aFechaIso(ahora);
-  const limite = sumarDias(hoy, DIAS_ANTICIPACION);
-  if (fecha < hoy) return "Esa fecha ya pasó. Elige una desde hoy.";
-  if (fecha > limite) {
-    return `Solo se puede agendar hasta ${DIAS_ANTICIPACION} días adelante (hasta el ${formatearFechaLarga(limite)}).`;
+  const { desde, hasta } = rangoFechasCita(ahora);
+  if (fecha < desde) return "Esa fecha ya pasó. Elige una desde hoy.";
+  if (fecha > hasta) {
+    return `Solo se puede agendar hasta ${DIAS_ANTICIPACION} días adelante (hasta el ${formatearFechaLarga(hasta)}).`;
   }
   return "";
+}
+
+// RN-17: el asistente parte en el primer paso que falta, así se saltan los que ya
+// vienen resueltos por la URL (?servicio, ?nutricionista) o por la reserva guardada.
+export function primerPasoIncompleto(reserva) {
+  if (!reserva.servicioCodigo) return 1;
+  if (!reserva.nutricionistaId) return 2;
+  if (!reserva.fecha || !reserva.hora) return 3;
+  return 4;
 }
 
 // Filtros opcionales: si no se pasa uno, no restringe. Fechas en texto "AAAA-MM-DD".
