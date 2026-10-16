@@ -123,6 +123,14 @@ describe("citasService: estadisticas", () => {
   it("entrega la forma que esperan el dashboard y los reportes", async () => {
     const resultado = await estadisticas("2030-01-01", "2030-01-31");
 
+    expect(Object.keys(resultado).sort()).toEqual([
+      "atendidas",
+      "inasistencias",
+      "porNutricionista",
+      "porSemana",
+      "tasaInasistencia",
+      "total",
+    ]);
     expect(resultado.porNutricionista.map((fila) => fila.nutricionistaId)).toEqual([
       "NUT001",
       "NUT002",

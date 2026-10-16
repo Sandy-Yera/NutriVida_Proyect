@@ -50,5 +50,10 @@ export async function proximasHorasLibres(cantidad) {
 
 export async function estadisticas(desde, hasta) {
   const [citas, nutricionistas] = await Promise.all([citasData.listar(), listarNutricionistas()]);
-  return calcularEstadisticas(citas, desde, hasta, nutricionistas.map((n) => n.id));
+  return calcularEstadisticas(
+    citas,
+    desde,
+    hasta,
+    nutricionistas.map((n) => n.id),
+  );
 }
