@@ -189,3 +189,31 @@ export function calcularEstadisticas(citas, desde, hasta, nutricionistaIds) {
     porSemana,
   };
 }
+
+// Para el Inicio (agenda rápida): las próximas horas libres de toda la clínica, desde ahora.
+// Recorre día por día (con un tope) y ordena por fecha, hora y nutricionista.
+export function buscarProximasHorasLibres(
+  nutricionistas,
+  citas,
+  ahora,
+  cantidad,
+  diasMaximos = 14,
+) {
+  const encontradas = [];
+  let fecha = aFechaIso(ahora);
+  for (let dia = 0; dia < diasMaximos && encontradas.length < cantidad; dia++) {
+    const delDia = nutricionistas.flatMap((nutricionista) =>
+      horariosDisponibles(nutricionista, fecha, citas, DURACION_BLOQUE, ahora).map((hora) => ({
+        nutricionistaId: nutricionista.id,
+        fecha,
+        hora,
+      })),
+    );
+    delDia.sort(
+      (a, b) => a.hora.localeCompare(b.hora) || a.nutricionistaId.localeCompare(b.nutricionistaId),
+    );
+    encontradas.push(...delDia);
+    fecha = sumarDias(fecha, 1);
+  }
+  return encontradas.slice(0, Math.max(0, cantidad));
+}

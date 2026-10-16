@@ -1,12 +1,11 @@
-import { citasSemilla } from "../data/semillas/citas.js";
 import * as citasData from "../data/citasData.js";
 import * as pagosData from "../data/pagosData.js";
-import { filtrarCitas, calcularEstadisticas } from "../utils/citas.js";
-import { listarNutricionistas } from "./serviciosService.js";
+import * as citasUtils from "../utils/citas.js";
+import { listarNutricionistas, obtenerNutricionista } from "./serviciosService.js";
 
 export async function listarCitas({ pacienteId, nutricionistaId, estado, desde, hasta } = {}) {
   const citas = await citasData.listar();
-  return filtrarCitas(citas, { pacienteId, nutricionistaId, estado, desde, hasta });
+  return citasUtils.filtrarCitas(citas, { pacienteId, nutricionistaId, estado, desde, hasta });
 }
 
 export async function obtenerCita(id) {
@@ -31,26 +30,26 @@ export async function reprogramarCita(id, fecha, hora, usuarioId) {
   return citasData.reprogramar(id, fecha, hora, usuarioId);
 }
 
-// Pendiente (P1-5): calcular con utils/citas.horariosDisponibles.
-export async function horariosDisponibles(nutricionistaId, fecha) {
-  return ["09:00", "09:30", "10:00", "10:30"];
+// RN-10 a RN-12: horas libres del nutricionista ese día, sin choques ni horas pasadas.
+// duracionMin es un tercer parámetro opcional: no cambia el contrato.
+export async function horariosDisponibles(nutricionistaId, fecha, duracionMin = 30) {
+  const [citas, nutricionista] = await Promise.all([
+    citasData.listar(),
+    obtenerNutricionista(nutricionistaId),
+  ]);
+  if (!nutricionista) return [];
+  return citasUtils.horariosDisponibles(nutricionista, fecha, citas, duracionMin, new Date());
 }
 
-// Pendiente (P1-5): recorrer los próximos días con horariosDisponibles.
+// Agenda rápida del Inicio (Catalina): las próximas horas libres de cualquier nutricionista.
 export async function proximasHorasLibres(cantidad) {
-  const [, , c3, c4, c5] = citasSemilla;
-  const ejemplos = [
-    { nutricionistaId: "NUT001", fecha: c3.fecha, hora: "09:00" },
-    { nutricionistaId: "NUT003", fecha: c4.fecha, hora: "10:00" },
-    { nutricionistaId: "NUT002", fecha: c5.fecha, hora: "11:00" },
-    { nutricionistaId: "NUT001", fecha: c3.fecha, hora: "15:00" },
-  ];
-  return ejemplos.slice(0, cantidad);
+  const [citas, nutricionistas] = await Promise.all([citasData.listar(), listarNutricionistas()]);
+  return citasUtils.buscarProximasHorasLibres(nutricionistas, citas, new Date(), cantidad);
 }
 
 export async function estadisticas(desde, hasta) {
   const [citas, nutricionistas] = await Promise.all([citasData.listar(), listarNutricionistas()]);
-  return calcularEstadisticas(
+  return citasUtils.calcularEstadisticas(
     citas,
     desde,
     hasta,

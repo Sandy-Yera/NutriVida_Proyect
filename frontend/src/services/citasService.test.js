@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   cambiarEstado,
   estadisticas,
+  horariosDisponibles,
   listarCitas,
   obtenerCita,
+  proximasHorasLibres,
   reprogramarCita,
 } from "./citasService.js";
 import { crear } from "../data/citasData.js";
@@ -175,5 +177,59 @@ describe("citasService: estadisticas", () => {
     await cambiarEstado(nueva.id, "CANCELADA", "U102");
 
     expect((await estadisticas("2030-03-01", "2030-03-31")).total).toBe(0);
+  });
+});
+
+describe("citasService: horariosDisponibles", () => {
+  // 2030-01-07 es lunes: Daniela (NUT003) atiende de 08:00 a 13:00.
+  it("devuelve las horas libres de la jornada en un día que atiende", async () => {
+    expect(await horariosDisponibles("NUT003", "2030-01-07")).toHaveLength(10);
+  });
+
+  it("quita las horas ocupadas por citas guardadas", async () => {
+    crear({
+      pacienteId: "U102",
+      nutricionistaId: "NUT003",
+      servicioCodigo: "CN002",
+      fecha: "2030-01-07",
+      hora: "09:00",
+      duracionMin: 30,
+    });
+
+    expect(await horariosDisponibles("NUT003", "2030-01-07")).not.toContain("09:00");
+  });
+
+  it("con un servicio de 50 min no ofrece la última hora de la jornada", async () => {
+    expect(await horariosDisponibles("NUT003", "2030-01-07", 50)).not.toContain("12:30");
+  });
+
+  it("devuelve una lista vacía si no atiende ese día o si el nutricionista no existe", async () => {
+    expect(await horariosDisponibles("NUT002", "2030-01-07")).toEqual([]);
+    expect(await horariosDisponibles("NUT999", "2030-01-07")).toEqual([]);
+  });
+});
+
+describe("citasService: proximasHorasLibres", () => {
+  it("devuelve la cantidad pedida con la forma que usa el Inicio", async () => {
+    const horas = await proximasHorasLibres(4);
+
+    expect(horas).toHaveLength(4);
+    horas.forEach((h) => {
+      expect(Object.keys(h).sort()).toEqual(["fecha", "hora", "nutricionistaId"]);
+      expect(h.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(h.hora).toMatch(/^\d{2}:\d{2}$/);
+    });
+  });
+
+  it("las horas vienen en orden y todas son futuras", async () => {
+    const horas = await proximasHorasLibres(6);
+    const claves = horas.map((h) => `${h.fecha} ${h.hora}`);
+
+    expect(claves).toEqual([...claves].sort());
+    horas.forEach((h) => {
+      const [anio, mes, dia] = h.fecha.split("-").map(Number);
+      const [hh, mm] = h.hora.split(":").map(Number);
+      expect(new Date(anio, mes - 1, dia, hh, mm).getTime()).toBeGreaterThan(Date.now());
+    });
   });
 });

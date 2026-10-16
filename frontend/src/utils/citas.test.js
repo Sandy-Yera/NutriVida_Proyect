@@ -4,6 +4,7 @@ import {
   agruparPorNutricionista,
   agruparPorSemana,
   bloquesQueOcupa,
+  buscarProximasHorasLibres,
   calcularEstadisticas,
   chocaConOtraCita,
   filtrarCitas,
@@ -411,5 +412,63 @@ describe("calcularEstadisticas", () => {
     expect(calcularEstadisticas(pendientes, "2026-10-12", "2026-10-18", IDS).tasaInasistencia).toBe(
       0,
     );
+  });
+});
+
+describe("buscarProximasHorasLibres", () => {
+  // Los 4 nutricionistas del catálogo. 2026-10-12 es lunes.
+  const felipe = { id: "NUT004", dias: [2, 3, 4, 5], horaInicio: "14:00", horaFin: "19:00" };
+  const todos = [carolina, rodrigo, daniela, felipe];
+  const LUNES_7AM = new Date(2026, 9, 12, 7, 0);
+
+  it("devuelve las primeras horas libres en orden: un lunes a las 7:00 empieza Daniela a las 08:00", () => {
+    expect(buscarProximasHorasLibres(todos, [], LUNES_7AM, 3)).toEqual([
+      { nutricionistaId: "NUT003", fecha: LUNES, hora: "08:00" },
+      { nutricionistaId: "NUT003", fecha: LUNES, hora: "08:30" },
+      { nutricionistaId: "NUT001", fecha: LUNES, hora: "09:00" },
+    ]);
+  });
+
+  it("no ofrece horas ocupadas ni horas que ya pasaron", () => {
+    const citas = [
+      {
+        id: "C1",
+        nutricionistaId: "NUT003",
+        fecha: LUNES,
+        hora: "09:00",
+        duracionMin: 30,
+        estado: "CONFIRMADA",
+      },
+    ];
+    const ahora = new Date(2026, 9, 12, 8, 40);
+
+    expect(buscarProximasHorasLibres(todos, citas, ahora, 3)).toEqual([
+      { nutricionistaId: "NUT001", fecha: LUNES, hora: "09:00" },
+      { nutricionistaId: "NUT001", fecha: LUNES, hora: "09:30" },
+      { nutricionistaId: "NUT003", fecha: LUNES, hora: "09:30" },
+    ]);
+  });
+
+  it("si hoy ya no quedan horas, sigue con el día siguiente", () => {
+    const lunesNoche = new Date(2026, 9, 12, 18, 0);
+
+    expect(buscarProximasHorasLibres(todos, [], lunesNoche, 1)).toEqual([
+      { nutricionistaId: "NUT003", fecha: "2026-10-13", hora: "08:00" },
+    ]);
+  });
+
+  it("junta horas de varios días cuando un día no alcanza", () => {
+    const lunesTarde = new Date(2026, 9, 12, 16, 10); // a Carolina le queda solo 16:30
+    const horas = buscarProximasHorasLibres(todos, [], lunesTarde, 2);
+
+    expect(horas.map((h) => `${h.fecha} ${h.hora}`)).toEqual([
+      "2026-10-12 16:30",
+      "2026-10-13 08:00",
+    ]);
+  });
+
+  it("devuelve una lista vacía si la cantidad es 0 o no hay nutricionistas", () => {
+    expect(buscarProximasHorasLibres(todos, [], LUNES_7AM, 0)).toEqual([]);
+    expect(buscarProximasHorasLibres([], [], LUNES_7AM, 4)).toEqual([]);
   });
 });
