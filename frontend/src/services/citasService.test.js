@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { cambiarEstado, listarCitas, obtenerCita, reprogramarCita } from "./citasService.js";
+import {
+  cambiarEstado,
+  estadisticas,
+  listarCitas,
+  obtenerCita,
+  reprogramarCita,
+} from "./citasService.js";
 import { crear } from "../data/citasData.js";
 import { obtener as obtenerPago } from "../data/pagosData.js";
 
@@ -110,5 +116,64 @@ describe("citasService: reprogramarCita", () => {
     await expect(reprogramarCita("C0005", "2030-02-01", "11:30", "U101")).rejects.toThrow(
       "Solo se puede reprogramar",
     );
+  });
+});
+
+describe("citasService: estadisticas", () => {
+  it("entrega la forma que esperan el dashboard y los reportes", async () => {
+    const resultado = await estadisticas("2030-01-01", "2030-01-31");
+
+    expect(Object.keys(resultado).sort()).toEqual([
+      "atendidas",
+      "inasistencias",
+      "porNutricionista",
+      "porSemana",
+      "tasaInasistencia",
+      "total",
+    ]);
+    expect(resultado.porNutricionista.map((fila) => fila.nutricionistaId)).toEqual([
+      "NUT001",
+      "NUT002",
+      "NUT003",
+      "NUT004",
+    ]);
+  });
+
+  it("calcula desde las citas guardadas y cambia con el período", async () => {
+    crear({
+      pacienteId: "U102",
+      nutricionistaId: "NUT003",
+      servicioCodigo: "CN002",
+      fecha: "2030-01-08",
+      hora: "09:00",
+    });
+    crear({
+      pacienteId: "U101",
+      nutricionistaId: "NUT002",
+      servicioCodigo: "CN002",
+      fecha: "2030-02-05",
+      hora: "09:00",
+    });
+
+    const enero = await estadisticas("2030-01-01", "2030-01-31");
+    const febrero = await estadisticas("2030-02-01", "2030-02-28");
+
+    expect(enero.total).toBe(1);
+    expect(enero.porNutricionista.find((f) => f.nutricionistaId === "NUT003").total).toBe(1);
+    expect(febrero.total).toBe(1);
+    expect(febrero.porNutricionista.find((f) => f.nutricionistaId === "NUT002").total).toBe(1);
+  });
+
+  it("no cuenta una cita que se canceló", async () => {
+    const nueva = crear({
+      pacienteId: "U102",
+      nutricionistaId: "NUT003",
+      servicioCodigo: "CN002",
+      fecha: "2030-03-05",
+      hora: "09:00",
+    });
+    await cambiarEstado(nueva.id, "CANCELADA", "U102");
+
+    expect((await estadisticas("2030-03-01", "2030-03-31")).total).toBe(0);
   });
 });

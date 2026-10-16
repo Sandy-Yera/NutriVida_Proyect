@@ -1,4 +1,4 @@
-import { aFechaLocal } from "./formato.js";
+import { aFechaIso, aFechaLocal } from "./formato.js";
 
 const MS_24_HORAS = 24 * 60 * 60 * 1000;
 const DURACION_BLOQUE = 30;
@@ -135,4 +135,57 @@ export function filtrarCitas(citas, { pacienteId, nutricionistaId, estado, desde
         (!hasta || c.fecha <= hasta),
     )
     .sort((a, b) => `${a.fecha} ${a.hora}`.localeCompare(`${b.fecha} ${b.hora}`));
+}
+
+export function agruparPorNutricionista(citas, nutricionistaIds) {
+  return nutricionistaIds.map((nutricionistaId) => ({
+    nutricionistaId,
+    total: citas.filter((cita) => cita.nutricionistaId === nutricionistaId).length,
+  }));
+}
+
+export function agruparPorSemana(citas, desde, hasta) {
+  const ultima = lunesDeLaSemana(hasta);
+  const semanas = [];
+  for (let lunes = lunesDeLaSemana(desde); lunes <= ultima; lunes = sumarDias(lunes, 7)) {
+    semanas.push(lunes);
+  }
+  return semanas.map((semana) => ({
+    semana,
+    total: citas.filter((cita) => lunesDeLaSemana(cita.fecha) === semana).length,
+  }));
+}
+
+export function lunesDeLaSemana(fecha) {
+  const d = aFechaLocal(fecha);
+  const dia = d.getDay();
+  d.setDate(d.getDate() - dia + (dia === 0 ? -6 : 1));
+  return aFechaIso(d);
+}
+
+function sumarDias(fecha, dias) {
+  // texto → texto, con días de calendario
+  const d = aFechaLocal(fecha);
+  d.setDate(d.getDate() + dias);
+  return aFechaIso(d);
+}
+
+export function calcularEstadisticas(citas, desde, hasta, nutricionistaIds) {
+  const delPeriodo = filtrarCitas(citas, { desde, hasta }).filter((c) => c.estado !== "CANCELADA");
+  const total = delPeriodo.length;
+  const atendidas = delPeriodo.filter((c) => c.estado === "ATENDIDA").length;
+  const inasistencias = delPeriodo.filter((c) => c.estado === "INASISTENCIA").length;
+  const tasaInasistencia =
+    atendidas + inasistencias > 0 ? inasistencias / (atendidas + inasistencias) : 0;
+  const porNutricionista = agruparPorNutricionista(delPeriodo, nutricionistaIds);
+  const porSemana = agruparPorSemana(delPeriodo, desde, hasta);
+
+  return {
+    total,
+    atendidas,
+    inasistencias,
+    tasaInasistencia,
+    porNutricionista,
+    porSemana,
+  };
 }

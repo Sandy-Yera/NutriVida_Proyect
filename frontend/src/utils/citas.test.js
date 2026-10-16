@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   TRANSICIONES,
+  agruparPorNutricionista,
+  agruparPorSemana,
   bloquesQueOcupa,
+  calcularEstadisticas,
   chocaConOtraCita,
   filtrarCitas,
   generarBloques,
   horariosDisponibles,
+  lunesDeLaSemana,
   necesitaRecordatorio,
   puedeAgendarTeleconsulta,
   puedeCancelar,
@@ -285,5 +289,127 @@ describe("filtrarCitas", () => {
 
     expect(ids(filtrarCitas(citas, { pacienteId: "U100", estado: "ATENDIDA" }))).toEqual(["C3"]);
     expect(citas).toEqual(copia);
+  });
+});
+
+// RN-34: estadísticas del período.
+const IDS = ["NUT001", "NUT002", "NUT003", "NUT004"];
+const cita = (id, nutricionistaId, fecha, estado) => ({
+  id,
+  nutricionistaId,
+  fecha,
+  hora: "10:00",
+  estado,
+});
+
+describe("lunesDeLaSemana", () => {
+  it("devuelve el lunes de la semana de un día cualquiera", () => {
+    expect(lunesDeLaSemana("2026-10-16")).toBe("2026-10-12"); // viernes
+    expect(lunesDeLaSemana("2026-10-12")).toBe("2026-10-12"); // lunes
+  });
+
+  it("el domingo pertenece a la semana que empezó el lunes anterior", () => {
+    expect(lunesDeLaSemana("2026-10-18")).toBe("2026-10-12");
+  });
+
+  it("cruza bien un cambio de mes", () => {
+    expect(lunesDeLaSemana("2026-10-01")).toBe("2026-09-28"); // jueves
+  });
+});
+
+describe("agruparPorNutricionista", () => {
+  it("incluye a todos los nutricionistas, aunque tengan 0 citas", () => {
+    const citas = [
+      cita("1", "NUT001", "2026-10-05", "ATENDIDA"),
+      cita("2", "NUT003", "2026-10-06", "PENDIENTE"),
+    ];
+
+    expect(agruparPorNutricionista(citas, IDS)).toEqual([
+      { nutricionistaId: "NUT001", total: 1 },
+      { nutricionistaId: "NUT002", total: 0 },
+      { nutricionistaId: "NUT003", total: 1 },
+      { nutricionistaId: "NUT004", total: 0 },
+    ]);
+  });
+});
+
+describe("agruparPorSemana", () => {
+  it("incluye todas las semanas del rango, también las que no tienen citas", () => {
+    expect(agruparPorSemana([], "2026-10-01", "2026-10-20")).toEqual([
+      { semana: "2026-09-28", total: 0 },
+      { semana: "2026-10-05", total: 0 },
+      { semana: "2026-10-12", total: 0 },
+      { semana: "2026-10-19", total: 0 },
+    ]);
+  });
+
+  it("cuenta cada cita en la semana de su lunes", () => {
+    const citas = [
+      cita("1", "NUT001", "2026-10-05", "ATENDIDA"), // lunes
+      cita("2", "NUT001", "2026-10-11", "ATENDIDA"), // domingo de la misma semana
+      cita("3", "NUT002", "2026-10-14", "PENDIENTE"),
+    ];
+
+    expect(agruparPorSemana(citas, "2026-10-05", "2026-10-18")).toEqual([
+      { semana: "2026-10-05", total: 2 },
+      { semana: "2026-10-12", total: 1 },
+    ]);
+  });
+
+  it("un rango de un solo día tiene una semana", () => {
+    expect(agruparPorSemana([], "2026-10-14", "2026-10-14")).toEqual([
+      { semana: "2026-10-12", total: 0 },
+    ]);
+  });
+});
+
+describe("calcularEstadisticas", () => {
+  const citas = [
+    cita("1", "NUT001", "2026-10-05", "ATENDIDA"),
+    cita("2", "NUT001", "2026-10-06", "ATENDIDA"),
+    cita("3", "NUT003", "2026-10-07", "ATENDIDA"),
+    cita("4", "NUT002", "2026-10-08", "INASISTENCIA"),
+    cita("5", "NUT003", "2026-10-14", "PENDIENTE"),
+    cita("6", "NUT003", "2026-10-14", "CANCELADA"), // no cuenta
+    cita("7", "NUT002", "2026-10-25", "ATENDIDA"), // fuera del rango
+  ];
+  const resultado = calcularEstadisticas(citas, "2026-10-01", "2026-10-20", IDS);
+
+  it("cuenta las citas del período sin las canceladas ni las de fuera del rango", () => {
+    expect(resultado).toMatchObject({ total: 5, atendidas: 3, inasistencias: 1 });
+  });
+
+  it("la tasa de inasistencia es una proporción sobre las citas ya ocurridas", () => {
+    // 1 inasistencia de 4 citas ocurridas (3 atendidas + 1 inasistencia); la pendiente no cuenta.
+    expect(resultado.tasaInasistencia).toBe(0.25);
+  });
+
+  it("cada agrupación suma lo mismo que el total", () => {
+    const suma = (filas) => filas.reduce((acc, fila) => acc + fila.total, 0);
+
+    expect(suma(resultado.porNutricionista)).toBe(resultado.total);
+    expect(suma(resultado.porSemana)).toBe(resultado.total);
+    expect(resultado.porSemana.map((s) => s.semana)).toEqual([
+      "2026-09-28",
+      "2026-10-05",
+      "2026-10-12",
+      "2026-10-19",
+    ]);
+  });
+
+  it("sin citas en el período devuelve todo en 0 y una tasa de 0", () => {
+    const vacio = calcularEstadisticas([], "2026-10-01", "2026-10-20", IDS);
+
+    expect(vacio).toMatchObject({ total: 0, atendidas: 0, inasistencias: 0, tasaInasistencia: 0 });
+    expect(vacio.porNutricionista).toHaveLength(4);
+    expect(vacio.porSemana).toHaveLength(4);
+  });
+
+  it("con solo citas pendientes la tasa es 0 y no se divide por cero", () => {
+    const pendientes = [cita("1", "NUT001", "2026-10-14", "PENDIENTE")];
+
+    expect(calcularEstadisticas(pendientes, "2026-10-12", "2026-10-18", IDS).tasaInasistencia).toBe(
+      0,
+    );
   });
 });
