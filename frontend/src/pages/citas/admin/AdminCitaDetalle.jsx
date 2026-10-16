@@ -1,5 +1,5 @@
 import EnConstruccion from "../../../components/citas/EnConstruccion.jsx";
 
 export default function AdminCitaDetalle() {
-    return <EnConstruccion titulo="Admin Cita Detalle" tarea="S-05" />;
+  return <EnConstruccion titulo="Detalle de la cita" tarea="S-08" />;
 }

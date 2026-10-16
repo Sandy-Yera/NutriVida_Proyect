@@ -43,6 +43,39 @@ describe("citasData: lectura y creación", () => {
     });
 });
 
+describe("citasData: validaciones al crear", () => {
+    it("exige paciente, nutricionista y servicio", () => {
+        expect(() => crear({ ...datos, pacienteId: undefined })).toThrow("Faltan datos de la cita");
+    });
+
+    it("exige fecha AAAA-MM-DD y hora HH:mm", () => {
+        expect(() => crear({ ...datos, fecha: "20/10/2026" })).toThrow("AAAA-MM-DD");
+        expect(() => crear({ ...datos, hora: "9:00" })).toThrow("HH:mm");
+    });
+
+    it("no permite tomar un horario ocupado por otra cita del mismo nutricionista", () => {
+        const c0004 = obtener("C0004"); // Daniela, 50 min desde las 08:30: ocupa 08:30 y 09:00
+
+        expect(() => crear({ ...datos, fecha: c0004.fecha, hora: "09:00" })).toThrow(
+            "Ese horario ya está tomado",
+        );
+        expect(listar()).toHaveLength(5);
+    });
+
+    it("permite tomar el horario de una cita cancelada", () => {
+        const c0004 = obtener("C0004");
+        cambiarEstado("C0004", "CANCELADA", "U102");
+
+        expect(crear({ ...datos, fecha: c0004.fecha, hora: "08:30" }).id).toBe("C0006");
+    });
+
+    it("no acepta un historial inventado", () => {
+        const nueva = crear({ ...datos, historial: [{ de: "X", a: "ATENDIDA" }] });
+
+        expect(nueva.historial).toEqual([]);
+    });
+});
+
 describe("citasData: cambiarEstado", () => {
     it("confirma una cita pendiente y registra el cambio en el historial", () => {
         const cita = cambiarEstado("C0004", "CONFIRMADA", "U002");
@@ -91,6 +124,24 @@ describe("citasData: reprogramar", () => {
     });
 });
 
+describe("citasData: reprogramar sin choques", () => {
+    it("no permite mover una cita a un horario ocupado", () => {
+        const c0004 = obtener("C0004");
+        crear({ ...datos, fecha: c0004.fecha, hora: "11:00" });
+
+        expect(() => reprogramar("C0004", c0004.fecha, "10:30", "U102")).toThrow(
+            "Ese horario ya está tomado",
+        );
+        expect(obtener("C0004").hora).toBe("08:30");
+    });
+
+    it("permite correr una cita dentro de su propio horario", () => {
+        const c0004 = obtener("C0004");
+
+        expect(reprogramar("C0004", c0004.fecha, "09:00", "U102").hora).toBe("09:00");
+    });
+});
+
 describe("citasData: actualizar", () => {
     it("actualiza otros campos sin permitir cambiar el id ni la fecha de creación", () => {
         const original = obtener("C0004");
@@ -112,6 +163,10 @@ describe("citasData: actualizar", () => {
         expect(() => actualizar("C0004", { estado: "CONFIRMADA" })).toThrow("cambiarEstado");
         expect(() => actualizar("C0004", { historial: [] })).toThrow("cambiarEstado");
         expect(obtener("C0004").estado).toBe("PENDIENTE");
+    });
+
+    it("no permite cambiar fecha ni hora por esta vía", () => {
+        expect(() => actualizar("C0004", { hora: "12:00" })).toThrow("reprogramar");
     });
 
     it("lanza un error al actualizar una cita que no existe", () => {

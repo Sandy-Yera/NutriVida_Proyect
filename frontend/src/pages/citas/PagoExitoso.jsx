@@ -1,5 +1,5 @@
 import EnConstruccion from "../../components/citas/EnConstruccion.jsx";
 
 export default function PagoExitoso() {
-    return <EnConstruccion titulo="Pago Exitoso" tarea="S-05" />;
+  return <EnConstruccion titulo="Solicitud enviada" tarea="S-04" />;
 }

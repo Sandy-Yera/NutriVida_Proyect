@@ -1,5 +1,5 @@
 import EnConstruccion from "../../components/citas/EnConstruccion.jsx";
 
 export default function AgendaNutricionista() {
-    return <EnConstruccion titulo="Agenda Nutricionista" tarea="S-05" />;
+  return <EnConstruccion titulo="Mi agenda" tarea="S-07" />;
 }
