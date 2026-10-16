@@ -1,7 +1,8 @@
 import { citasSemilla } from "../data/semillas/citas.js";
 import * as citasData from "../data/citasData.js";
 import * as pagosData from "../data/pagosData.js";
-import { filtrarCitas } from "../utils/citas.js";
+import { filtrarCitas, calcularEstadisticas } from "../utils/citas.js";
+import { listarNutricionistas } from "./serviciosService.js";
 
 export async function listarCitas({ pacienteId, nutricionistaId, estado, desde, hasta } = {}) {
   const citas = await citasData.listar();
@@ -47,23 +48,7 @@ export async function proximasHorasLibres(cantidad) {
   return ejemplos.slice(0, cantidad);
 }
 
-// Pendiente (P1-4): calcular desde las citas guardadas.
 export async function estadisticas(desde, hasta) {
-  return {
-    total: 5,
-    atendidas: 1,
-    inasistencias: 1,
-    tasaInasistencia: 0.5,
-    porNutricionista: [
-      { nutricionistaId: "NUT001", total: 2 },
-      { nutricionistaId: "NUT002", total: 2 },
-      { nutricionistaId: "NUT003", total: 1 },
-      { nutricionistaId: "NUT004", total: 0 },
-    ],
-    porSemana: [
-      { semana: "2026-09-07", total: 1 },
-      { semana: "2026-09-28", total: 1 },
-      { semana: "2026-10-05", total: 3 },
-    ],
-  };
+  const [citas, nutricionistas] = await Promise.all([citasData.listar(), listarNutricionistas()]);
+  return calcularEstadisticas(citas, desde, hasta, nutricionistas.map((n) => n.id));
 }
