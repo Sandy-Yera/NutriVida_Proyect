@@ -61,6 +61,21 @@ export function puedeAgendarTeleconsulta(citasDelPaciente, codigosNoPresenciales
     );
 }
 
+// filtrarCitas, se utilizará para el citasService.js
+// Filtros opcionales: si no se pasa uno, no restringe. Fechas en texto "AAAA-MM-DD".
+export function filtrarCitas(citas, { pacienteId, nutricionistaId, estado, desde, hasta } = {}) {
+    return citas
+        .filter(
+            (c) =>
+                (!pacienteId || c.pacienteId === pacienteId) &&
+                (!nutricionistaId || c.nutricionistaId === nutricionistaId) &&
+                (!estado || c.estado === estado) &&
+                (!desde || c.fecha >= desde) &&
+                (!hasta || c.fecha <= hasta),
+        )
+        .sort((a, b) => `${a.fecha} ${a.hora}`.localeCompare(`${b.fecha} ${b.hora}`));
+}
+
 export function horariosDisponibles(nutricionista, fecha, citas, duracionMin, ahora) {
     const bloques = generarBloques(nutricionista, fecha);
 

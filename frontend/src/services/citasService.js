@@ -1,34 +1,35 @@
 import { citasSemilla } from "../data/semillas/citas.js";
+import { filtrarCitas } from "../utils/citas.js";
+import * as citasData from "../data/citasData.js";
 
 export async function listarCitas({ pacienteId, nutricionistaId, estado, desde, hasta } = {}) {
-  return citasSemilla;
+  const citas = await citasData.listar();
+  return filtrarCitas(citas, { pacienteId, nutricionistaId, estado, desde, hasta });
 }
 
 export async function obtenerCita(id) {
-  return citasSemilla.find((c) => c.id === id) ?? null;
+  return citasData.obtener(id);
 }
 
 export async function crearCita(datos) {
-  return {
-    ...datos,
-    id: "C9999",
-    estado: "PENDIENTE",
-    historial: [],
-    creadaEn: new Date().toLocaleDateString("sv-SE"),
-  };
+  return citasData.crear(datos);
 }
+
 
 export async function cambiarEstado(id, nuevoEstado, usuarioId) {
-  const cita = await obtenerCita(id);
-  return { ...cita, estado: nuevoEstado };
+  const cita = citasData.cambiarEstado(id, nuevoEstado, usuarioId);
+  if (nuevoEstado === "CANCELADA" && cita.pagoId) {
+    pagosData.actualizar(cita.pagoId, { estado: "REEMBOLSADO" });   // une dos archivos de datos
+  }
+  return cita;
 }
 
-export async function reprogramarCita(id, fecha, hora) {
-  const cita = await obtenerCita(id);
-  return { ...cita, fecha, hora, estado: "PENDIENTE" };
+export async function reprogramarCita(id, fecha, hora, usuarioId) {
+  return citasData.reprogramar(id, fecha, hora, usuarioId);
 }
 
 export async function horariosDisponibles(nutricionistaId, fecha) {
+
   return ["09:00", "09:30", "10:00", "10:30"];
 }
 
