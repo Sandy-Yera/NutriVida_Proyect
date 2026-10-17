@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ETIQUETAS_ESTADO,
+  accionesSecretaria,
+  armarAgenda,
   TRANSICIONES,
   agruparPorNutricionista,
   agruparPorSemana,
@@ -20,6 +22,7 @@ import {
   puedeTransicionar,
   rangoFechasCita,
   separarProximasEHistorial,
+  sumarDias,
   validarFechaCita,
   validarMotivo,
 } from "./citas.js";
@@ -582,5 +585,83 @@ describe("primerPasoIncompleto (RN-17)", () => {
         hora: "09:00",
       }),
     ).toBe(4);
+  });
+});
+
+describe("sumarDias", () => {
+  it("suma y resta días de calendario, cruzando meses y años", () => {
+    expect(sumarDias("2026-10-31", 1)).toBe("2026-11-01");
+    expect(sumarDias("2027-01-01", -1)).toBe("2026-12-31");
+  });
+});
+
+describe("accionesSecretaria (RN-02, RN-25)", () => {
+  it("salen de las transiciones, sin Marcar atendida", () => {
+    expect(accionesSecretaria("PENDIENTE")).toEqual(["CONFIRMADA", "CANCELADA"]);
+    expect(accionesSecretaria("CONFIRMADA")).toEqual(["INASISTENCIA", "CANCELADA"]);
+    expect(accionesSecretaria("ATENDIDA")).toEqual([]);
+    expect(accionesSecretaria("INASISTENCIA")).toEqual([]);
+  });
+});
+
+describe("armarAgenda (RN-09, RN-25, RN-33)", () => {
+  // LUNES = 2026-10-12. Daniela atiende de 08:00 a 13:00; Rodrigo no atiende los lunes;
+  // Carolina atiende de 09:00 a 17:00.
+  const equipo = [carolina, rodrigo, daniela];
+  const citas = [
+    {
+      id: "A",
+      nutricionistaId: "NUT003",
+      fecha: LUNES,
+      hora: "08:30",
+      duracionMin: 50,
+      estado: "PENDIENTE",
+    },
+    {
+      id: "B",
+      nutricionistaId: "NUT001",
+      fecha: LUNES,
+      hora: "09:00",
+      duracionMin: 30,
+      estado: "CANCELADA",
+    },
+    {
+      id: "C",
+      nutricionistaId: "NUT001",
+      fecha: "2026-10-13",
+      hora: "10:00",
+      duracionMin: 30,
+      estado: "PENDIENTE",
+    },
+  ];
+  const filas = armarAgenda(equipo, LUNES, citas);
+  const celda = (hora, id) =>
+    filas.find((f) => f.hora === hora).celdas.find((c) => c.nutricionistaId === id);
+
+  it("va del primer inicio al último término, en bloques de 30 min", () => {
+    expect(filas[0].hora).toBe("08:00");
+    expect(filas.at(-1).hora).toBe("16:30");
+    expect(filas).toHaveLength(18);
+  });
+
+  it("marca fuera de jornada lo que no está en el horario o el día del nutricionista", () => {
+    expect(celda("08:00", "NUT001").tipo).toBe("fuera");
+    expect(celda("10:00", "NUT002").tipo).toBe("fuera");
+    expect(celda("13:00", "NUT003").tipo).toBe("fuera");
+  });
+
+  it("pone la cita donde empieza y marca la continuación de una de 50 min", () => {
+    expect(celda("08:30", "NUT003")).toMatchObject({ tipo: "citas", citas: [{ id: "A" }] });
+    expect(celda("09:00", "NUT003").tipo).toBe("continua");
+    expect(celda("09:30", "NUT003").tipo).toBe("libre");
+  });
+
+  it("muestra una cancelada donde empieza, pero no ocupa bloques siguientes; ignora otros días", () => {
+    expect(celda("09:00", "NUT001")).toMatchObject({ tipo: "citas", citas: [{ id: "B" }] });
+    expect(celda("10:00", "NUT001").tipo).toBe("libre");
+  });
+
+  it("sin nutricionistas no hay filas", () => {
+    expect(armarAgenda([], LUNES, [])).toEqual([]);
   });
 });

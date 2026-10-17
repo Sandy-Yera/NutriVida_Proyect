@@ -219,7 +219,7 @@ export function lunesDeLaSemana(fecha) {
   return aFechaIso(d);
 }
 
-function sumarDias(fecha, dias) {
+export function sumarDias(fecha, dias) {
   // texto → texto, con días de calendario
   const d = aFechaLocal(fecha);
   d.setDate(d.getDate() + dias);
@@ -283,4 +283,50 @@ export function separarProximasEHistorial(citas, ahora) {
     proximas: ordenadas.filter(esProxima),
     historial: ordenadas.filter((c) => !esProxima(c)).reverse(),
   };
+}
+
+// RN-25: acciones de la secretaria sobre una cita. Salen de las transiciones permitidas (RN-02),
+// sin ATENDIDA, que la marca el nutricionista (RN-26). Reprogramar es aparte (RN-05).
+const ACCIONES_SECRETARIA = ["CONFIRMADA", "CANCELADA", "INASISTENCIA"];
+
+export function accionesSecretaria(estado) {
+  return (TRANSICIONES[estado] ?? []).filter((nuevo) => ACCIONES_SECRETARIA.includes(nuevo));
+}
+
+// RN-09, RN-25, RN-33: la grilla de la agenda de un día. Una fila por bloque, desde la hora en
+// que empieza el primer nutricionista hasta la última hora del que termina más tarde, y una
+// celda por nutricionista:
+// - "fuera": ese bloque no está en su jornada (o no atiende ese día). Se muestra "—".
+// - "citas": una o más citas empiezan en ese bloque.
+// - "continua": el bloque lo ocupa una cita que empezó antes (por ejemplo, una de 50 min).
+// - "libre": no hay nada.
+export function armarAgenda(nutricionistas, fecha, citas) {
+  if (nutricionistas.length === 0) return [];
+  const inicio = Math.min(...nutricionistas.map((n) => aMinutos(n.horaInicio)));
+  const fin = Math.max(...nutricionistas.map((n) => aMinutos(n.horaFin)));
+  const bloquesPorNutricionista = new Map(
+    nutricionistas.map((n) => [n.id, generarBloques(n, fecha)]),
+  );
+  const delDia = citas.filter((c) => c.fecha === fecha);
+
+  const filas = [];
+  for (let minuto = inicio; minuto + DURACION_BLOQUE <= fin; minuto += DURACION_BLOQUE) {
+    const hora = aHoraTexto(minuto);
+    const celdas = nutricionistas.map((n) => {
+      if (!bloquesPorNutricionista.get(n.id).includes(hora)) {
+        return { nutricionistaId: n.id, tipo: "fuera" };
+      }
+      const propias = delDia.filter((c) => c.nutricionistaId === n.id);
+      const empiezan = propias.filter((c) => c.hora === hora);
+      if (empiezan.length > 0) return { nutricionistaId: n.id, tipo: "citas", citas: empiezan };
+      const continua = propias.some(
+        (c) =>
+          ESTADOS_QUE_OCUPAN.includes(c.estado) &&
+          bloquesQueOcupa(c.hora, c.duracionMin).includes(hora),
+      );
+      return { nutricionistaId: n.id, tipo: continua ? "continua" : "libre" };
+    });
+    filas.push({ hora, celdas });
+  }
+  return filas;
 }
