@@ -8,7 +8,7 @@ El módulo es el "pedido" del caso: el flujo completo de una cita, desde que el 
 
 El módulo no administra servicios ni nutricionistas: los lee del módulo clínico (`serviciosService`). Tampoco maneja la sesión: la lee del módulo de acceso (`auth.js`).
 
-**Estado en esta versión:** RF-CIT-01 a 07 y RF-CIT-09 están construidos y probados. RF-CIT-08 (vista del administrador, tarea S-08) se completa antes de la integración; sus pruebas se agregan con ella.
+**Estado en esta versión:** los 9 requisitos (RF-CIT-01 a RF-CIT-09) están construidos y probados.
 
 ## 4.2 Actores
 
@@ -158,12 +158,15 @@ Estados: `PENDIENTE`, `CONFIRMADA`, `ATENDIDA`, `CANCELADA` e `INASISTENCIA`.
 - **Descripción:** el administrador revisa todas las citas y el comprobante de cada pago.
 - **Actores:** administrador.
 - **Prioridad:** media.
-- **Vistas:** `/admin/citas` (`AdminCitas.jsx`) y `/admin/citas/:id` (`AdminCitaDetalle.jsx`). Tarea S-08.
+- **Vistas:** `/admin/citas` (`AdminCitas.jsx` con `FiltroCitas` y `TablaCitasAdmin`) y `/admin/citas/:id` (`AdminCitaDetalle.jsx` con `HistorialCita` y `ComprobantePago`), dentro del panel de administración.
 - **Reglas:**
-  - Tabla con filtros por estado, nutricionista y rango de fechas, y el total recaudado. El total suma solo los pagos APROBADOS: los rechazados no se cobraron y los reembolsados se devolvieron (RN-27).
-  - El detalle muestra la cita, su historial y el comprobante: n.° de pago, fecha, servicio, monto, estado y últimos 4 dígitos (RN-23, RN-27).
+  - Tabla con todas las citas, de la más reciente a la más antigua: n.° de cita, fecha y hora, paciente, nutricionista, servicio, estado, estado del pago y monto. En el móvil pasa a lista de tarjetas (`.tabla-lista`).
+  - Filtros por estado, nutricionista y rango de fechas, todos opcionales. Si las dos fechas están y la de inicio es posterior, se muestra "La fecha de inicio debe ser anterior o igual a la de término." (la misma regla de los reportes). Con algún filtro activo aparece "Limpiar filtros".
+  - Arriba, la cantidad de citas y el total recaudado de las citas filtradas. El total suma solo los pagos APROBADOS: los rechazados no se cobraron y los reembolsados se devolvieron (RN-27).
+  - El detalle muestra la cita, su historial (con quién hizo cada cambio) y el comprobante: n.° de pago, fecha, servicio, monto, estado y "Terminada en" con los últimos 4 dígitos (RN-04, RN-20, RN-23, RN-27).
+  - Si la cita no existe se muestra "La cita … no existe." con el enlace para volver.
 - **Criterio de aceptación:** el administrador abre una cita desde la tabla y ve su comprobante.
-- **Pruebas:** se agregan con S-08 (la función `totalRecaudado` ya está probada en `utils/pagos.test.js`).
+- **Pruebas:** `AdminCitas.test.jsx`, `AdminCitaDetalle.test.jsx` y `totalRecaudado` en `utils/pagos.test.js`.
 
 ### RF-CIT-09 Teleconsulta solo con una atención presencial previa
 
@@ -245,6 +248,7 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 - `pages/citas/MisCitas.test.jsx`: pestañas, citas propias, recordatorio, regla de 24 h, cancelar con reembolso, reprogramar y estado vacío.
 - `pages/citas/AgendaSecretaria.test.jsx`: grilla del día con "—" y continuación, acciones según el estado, confirmar con historial, inasistencia y cancelación con diálogo, reprogramar sin el límite de 24 h, filtro, navegación por día y sin enlaces a fichas.
 - `components/citas/GrillaAgenda.test.jsx`: pestañas por nutricionista en el móvil y aviso de la cita elegida.
+- `pages/citas/admin/AdminCitas.test.jsx` y `AdminCitaDetalle.test.jsx`: lista con el total, total sin reembolsos ni rechazos, filtros por estado, nutricionista y fechas, rango al revés, comprobante con los 4 últimos dígitos, historial y cita inexistente.
 - `pages/citas/AgendaNutricionista.test.jsx`: solo sus citas, marcar atendida con el historial, inasistencia con diálogo, pendiente sin acciones, enlace a la ficha, vista semana y navegación.
 
 ## 4.10 Trazabilidad
@@ -256,9 +260,9 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 | RF-CIT-03 | `/citas/pago`, `/citas/pago/exito/:citaId`, `/citas/pago/error` | `Pago`, `FormPago`, `PagoExitoso`, `PagoError`, `procesarPago`, `crearCita`, `reembolsarPagoSinCita` | S-T4, `Pago.test.jsx`, `PagoResultado.test.jsx`, `pagos.test.js`, `pagosService.test.js` |
 | RF-CIT-04 | `/mis-citas` | `MisCitas`, `TarjetaCita`, `PanelReprogramar`, `DialogoConfirmacion`, `puedeCancelar`, `cambiarEstado`, `reprogramarCita` | `MisCitas.test.jsx`, `citas.test.js`, `citasService.test.js` |
 | RF-CIT-05 | `/mis-citas` | `MisCitas`, `necesitaRecordatorio` | `MisCitas.test.jsx`, `citas.test.js` |
-| RF-CIT-06 | `/secretaria/agenda` | `AgendaSecretaria`, `GrillaAgenda`, `PanelReprogramar`, `armarAgenda`, `accionesSecretaria`, `TRANSICIONES` | S-T2, `AgendaSecretaria.test.jsx`, `GrillaAgenda.test.jsx`, `citas.test.js` |
+| RF-CIT-06 | `/secretaria/agenda` | `AgendaSecretaria`, `GrillaAgenda`, `PanelReprogramar`, `HistorialCita`, `armarAgenda`, `accionesSecretaria`, `TRANSICIONES` | S-T2, `AgendaSecretaria.test.jsx`, `GrillaAgenda.test.jsx`, `citas.test.js` |
 | RF-CIT-07 | `/nutricionista/agenda` | `AgendaNutricionista`, `accionesNutricionista`, `diasDeLaSemana` | `AgendaNutricionista.test.jsx`, `citas.test.js` |
-| RF-CIT-08 | `/admin/citas`, `/admin/citas/:id` | `AdminCitas`, `AdminCitaDetalle`, `totalRecaudado`, `obtenerPago` | `pagos.test.js`; las demás, con S-08 |
+| RF-CIT-08 | `/admin/citas`, `/admin/citas/:id` | `AdminCitas`, `AdminCitaDetalle`, `FiltroCitas`, `TablaCitasAdmin`, `HistorialCita`, `ComprobantePago`, `totalRecaudado`, `listarPagos`, `obtenerPago` | `AdminCitas.test.jsx`, `AdminCitaDetalle.test.jsx`, `pagos.test.js` |
 | RF-CIT-09 | `/citas/solicitar` | `puedeAgendarTeleconsulta` (util y service), `crearCita` | `SolicitarCita.test.jsx`, `citasService.test.js`, `citas.test.js` |
 
 ## 4.11 Datos asumidos
