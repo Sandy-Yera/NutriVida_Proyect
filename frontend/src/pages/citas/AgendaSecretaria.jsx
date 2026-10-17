@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ChipEstado from "../../components/citas/ChipEstado.jsx";
 import GrillaAgenda from "../../components/citas/GrillaAgenda.jsx";
+import HistorialCita from "../../components/citas/HistorialCita.jsx";
 import PanelReprogramar from "../../components/citas/PanelReprogramar.jsx";
 import DialogoConfirmacion from "../../components/comunes/DialogoConfirmacion.jsx";
 import { obtenerSesion } from "../../auth/auth.js";
@@ -35,10 +36,6 @@ const MENSAJE_HECHO = {
   INASISTENCIA: "Inasistencia registrada.",
   CANCELADA: "Cita cancelada. El pago quedó reembolsado.",
 };
-
-function formatearMomento(iso) {
-  return new Date(iso).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
-}
 
 // S-06 (RN-02, RN-04, RN-05, RN-25, RN-33): agenda de los 4 nutricionistas por día.
 // La secretaria confirma, reprograma, cancela y marca inasistencias. No ve fichas ni mediciones.
@@ -305,21 +302,7 @@ export default function AgendaSecretaria() {
               </dl>
 
               <h3 className="h6">Historial</h3>
-              {seleccionada.historial.length === 0 ? (
-                <p className="small text-body-secondary">
-                  Solicitada el {formatearFechaLarga(seleccionada.creadaEn)}. Sin cambios todavía.
-                </p>
-              ) : (
-                <ol className="small ps-3">
-                  {seleccionada.historial.map((entrada, indice) => (
-                    <li key={indice}>
-                      {formatearMomento(entrada.fecha)}: {ETIQUETAS_ESTADO[entrada.de]} →{" "}
-                      {ETIQUETAS_ESTADO[entrada.a]}
-                      {entrada.por ? `, por ${nombre(entrada.por)}` : ""}
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <HistorialCita cita={seleccionada} nombre={nombre} />
 
               {esFinal ? (
                 <p className="small text-body-secondary mb-0">
