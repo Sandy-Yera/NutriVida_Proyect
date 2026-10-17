@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ETIQUETAS_ESTADO,
+  accionesNutricionista,
   accionesSecretaria,
   armarAgenda,
   TRANSICIONES,
@@ -10,6 +11,7 @@ import {
   buscarProximasHorasLibres,
   calcularEstadisticas,
   chocaConOtraCita,
+  diasDeLaSemana,
   filtrarCitas,
   generarBloques,
   horariosDisponibles,
@@ -663,5 +665,28 @@ describe("armarAgenda (RN-09, RN-25, RN-33)", () => {
 
   it("sin nutricionistas no hay filas", () => {
     expect(armarAgenda([], LUNES, [])).toEqual([]);
+  });
+});
+
+describe("accionesNutricionista (RN-02, RN-26)", () => {
+  it("solo una cita confirmada se marca como atendida o inasistencia", () => {
+    expect(accionesNutricionista("CONFIRMADA")).toEqual(["ATENDIDA", "INASISTENCIA"]);
+    expect(accionesNutricionista("PENDIENTE")).toEqual([]);
+    expect(accionesNutricionista("ATENDIDA")).toEqual([]);
+    expect(accionesNutricionista("CANCELADA")).toEqual([]);
+  });
+});
+
+describe("diasDeLaSemana", () => {
+  it("devuelve de lunes a sábado aunque la fecha sea otro día, cruzando de mes", () => {
+    expect(diasDeLaSemana("2026-10-29")).toEqual([
+      "2026-10-26",
+      "2026-10-27",
+      "2026-10-28",
+      "2026-10-29",
+      "2026-10-30",
+      "2026-10-31",
+    ]);
+    expect(diasDeLaSemana("2026-11-01")[0]).toBe("2026-10-26");
   });
 });

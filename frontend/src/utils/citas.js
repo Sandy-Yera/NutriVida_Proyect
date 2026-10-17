@@ -330,3 +330,18 @@ export function armarAgenda(nutricionistas, fecha, citas) {
   }
   return filas;
 }
+
+// RN-26: acciones del nutricionista sobre una cita. Salen de las transiciones permitidas (RN-02):
+// solo una cita CONFIRMADA se marca como atendida o inasistencia. Confirmar y cancelar son de
+// la secretaria; una cita PENDIENTE espera su confirmación.
+const ACCIONES_NUTRICIONISTA = ["ATENDIDA", "INASISTENCIA"];
+
+export function accionesNutricionista(estado) {
+  return (TRANSICIONES[estado] ?? []).filter((nuevo) => ACCIONES_NUTRICIONISTA.includes(nuevo));
+}
+
+// Los días de atención de la semana de una fecha: de lunes a sábado, en texto "AAAA-MM-DD".
+export function diasDeLaSemana(fecha) {
+  const lunes = lunesDeLaSemana(fecha);
+  return [0, 1, 2, 3, 4, 5].map((dias) => sumarDias(lunes, dias));
+}
