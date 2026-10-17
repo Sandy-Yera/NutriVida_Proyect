@@ -1,26 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import SelectorHorario from "../../components/citas/SelectorHorario.jsx";
+import PanelReprogramar from "../../components/citas/PanelReprogramar.jsx";
 import TarjetaCita from "../../components/citas/TarjetaCita.jsx";
 import DialogoConfirmacion from "../../components/comunes/DialogoConfirmacion.jsx";
 import { obtenerSesion } from "../../auth/auth.js";
-import {
-  cambiarEstado,
-  horariosDisponibles,
-  listarCitas,
-  reprogramarCita,
-} from "../../services/citasService.js";
+import { cambiarEstado, listarCitas, reprogramarCita } from "../../services/citasService.js";
 import { listarNutricionistas, listarServicios } from "../../services/serviciosService.js";
 import {
-  generarBloques,
-  horasNoElegibles,
   necesitaRecordatorio,
   puedeCancelar,
   rangoFechasCita,
   separarProximasEHistorial,
-  validarFechaCita,
 } from "../../utils/citas.js";
 import { formatearFechaLarga } from "../../utils/formato.js";
+import { useHorasLibres } from "./useHorasLibres.js";
 
 // RN-06: texto del caso para cuando faltan 24 h o menos.
 const BLOQUEO_24H = "Ya no puedes cancelar: faltan menos de 24 h. Llama a la clínica.";
@@ -34,9 +27,7 @@ export default function MisCitas() {
   const [aviso, setAviso] = useState(null);
   const [aCancelar, setACancelar] = useState(null);
   const [reprogramando, setReprogramando] = useState(null);
-  const [horas, setHoras] = useState(null);
   const [procesando, setProcesando] = useState(false);
-  const tituloReprogramar = useRef(null);
 
   // RN-24: solo las citas del paciente en sesión.
   useEffect(() => {
@@ -53,32 +44,14 @@ export default function MisCitas() {
     };
   }, [sesion?.id]);
 
-  // Reprogramar (RN-10 a RN-12): horas libres sin contar la propia cita.
+  // Reprogramar (RN-10 a RN-13): horas libres sin contar la propia cita.
   const citaReprogramada = reprogramando?.cita;
-  const fechaNueva = reprogramando?.fecha;
-  const errorFecha = fechaNueva ? validarFechaCita(fechaNueva, ahora) : "";
-  const pedirHoras = Boolean(citaReprogramada && fechaNueva) && !errorFecha;
-  const claveHoras = `${citaReprogramada?.id}|${fechaNueva}`;
-
-  useEffect(() => {
-    if (!pedirHoras) return undefined;
-    let vigente = true;
-    horariosDisponibles(
-      citaReprogramada.nutricionistaId,
-      fechaNueva,
-      citaReprogramada.duracionMin,
-      citaReprogramada.id,
-    ).then((disponibles) => {
-      if (vigente) setHoras({ clave: `${citaReprogramada.id}|${fechaNueva}`, disponibles });
-    });
-    return () => {
-      vigente = false;
-    };
-  }, [pedirHoras, citaReprogramada, fechaNueva]);
-
-  useEffect(() => {
-    if (citaReprogramada) tituloReprogramar.current?.focus();
-  }, [citaReprogramada]);
+  const { errorFecha, horarios, horas } = useHorasLibres({
+    cita: citaReprogramada,
+    nutricionista: datos?.nutricionistas.find((n) => n.id === citaReprogramada?.nutricionistaId),
+    fecha: reprogramando?.fecha,
+    ahora,
+  });
 
   if (!datos) {
     return (
@@ -163,10 +136,6 @@ export default function MisCitas() {
     );
   }
 
-  const horasListas = pedirHoras && horas?.clave === claveHoras;
-  const disponibles = horasListas ? horas.disponibles : [];
-  const horaElegida = reprogramando?.hora;
-  const puedeConfirmar = horasListas && disponibles.includes(horaElegida) && !procesando;
   const lista = pestana === "proximas" ? proximas : historial;
 
   return (
@@ -196,67 +165,22 @@ export default function MisCitas() {
       )}
 
       {reprogramando && (
-        <div className="bg-white border rounded-3 p-3 mb-3">
-          <h2 ref={tituloReprogramar} tabIndex={-1} className="h5">
-            Reprogramar: {servicioDe(citaReprogramada)?.nombre} del{" "}
-            {formatearFechaLarga(citaReprogramada.fecha)}, {citaReprogramada.hora}
-          </h2>
-          <label htmlFor="fecha-reprogramar" className="form-label fw-semibold">
-            Nueva fecha
-          </label>
-          <input
-            id="fecha-reprogramar"
-            type="date"
-            className="form-control mb-2"
-            style={{ maxWidth: "16rem" }}
-            min={rangoFechasCita(ahora).desde}
-            max={rangoFechasCita(ahora).hasta}
-            value={fechaNueva ?? ""}
-            onChange={(evento) =>
-              setReprogramando((actual) => ({
-                ...actual,
-                fecha: evento.target.value || undefined,
-                hora: undefined,
-              }))
-            }
-            aria-invalid={Boolean(errorFecha)}
-          />
-          {errorFecha && (
-            <p role="alert" className="text-danger">
-              {errorFecha}
-            </p>
-          )}
-          {pedirHoras && !horasListas && <p role="status">Buscando horas disponibles...</p>}
-          {horasListas && (
-            <SelectorHorario
-              horarios={generarBloques(nutricionistaDe(citaReprogramada), fechaNueva)}
-              ocupados={horasNoElegibles(
-                generarBloques(nutricionistaDe(citaReprogramada), fechaNueva),
-                disponibles,
-              )}
-              seleccionado={horaElegida}
-              onSeleccionar={(hora) => setReprogramando((actual) => ({ ...actual, hora }))}
-            />
-          )}
-          <div className="d-flex flex-wrap gap-2 mt-3">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!puedeConfirmar}
-              onClick={confirmarReprogramacion}
-            >
-              {procesando ? "Guardando..." : "Confirmar nueva hora"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-secondary"
-              disabled={procesando}
-              onClick={() => setReprogramando(null)}
-            >
-              No reprogramar
-            </button>
-          </div>
-        </div>
+        <PanelReprogramar
+          titulo={`Reprogramar: ${servicioDe(citaReprogramada)?.nombre} del ${formatearFechaLarga(citaReprogramada.fecha)}, ${citaReprogramada.hora}`}
+          rango={rangoFechasCita(ahora)}
+          fecha={reprogramando.fecha}
+          errorFecha={errorFecha}
+          horarios={horarios}
+          horas={horas}
+          hora={reprogramando.hora}
+          procesando={procesando}
+          onCambiarFecha={(fecha) =>
+            setReprogramando((actual) => ({ ...actual, fecha, hora: undefined }))
+          }
+          onElegirHora={(hora) => setReprogramando((actual) => ({ ...actual, hora }))}
+          onConfirmar={confirmarReprogramacion}
+          onCerrar={() => setReprogramando(null)}
+        />
       )}
 
       <div className="nav nav-tabs mb-3" role="tablist" aria-label="Mis citas">
