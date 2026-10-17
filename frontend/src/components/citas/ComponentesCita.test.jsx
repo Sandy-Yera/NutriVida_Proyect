@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import ChipEstado from "./ChipEstado.jsx";
+import HistorialCita from "./HistorialCita.jsx";
 import PasosWizard from "./PasosWizard.jsx";
 import ResumenCita from "./ResumenCita.jsx";
 
@@ -62,5 +63,31 @@ describe("ResumenCita", () => {
     );
 
     expect(screen.queryByText("Motivo")).not.toBeInTheDocument();
+  });
+});
+
+describe("HistorialCita (RN-04)", () => {
+  const nombre = (id) => ({ U002: "Marta Ríos" })[id] ?? id;
+
+  it("muestra cada cambio con quién lo hizo y rotula la reprogramación", () => {
+    const cita = {
+      creadaEn: "2026-10-01",
+      historial: [
+        { fecha: "2026-10-02T13:05:00.000Z", de: "PENDIENTE", a: "CONFIRMADA", por: "U002" },
+        { fecha: "2026-10-03T13:05:00.000Z", de: "CONFIRMADA", a: "PENDIENTE", por: "U002" },
+      ],
+    };
+    render(<HistorialCita cita={cita} nombre={nombre} />);
+
+    const entradas = screen.getAllByRole("listitem");
+    expect(entradas[0]).toHaveTextContent("Pendiente → Confirmada, por Marta Ríos");
+    expect(entradas[1]).toHaveTextContent("Reprogramada (Confirmada → Pendiente), por Marta Ríos");
+    expect(entradas[0]).toHaveTextContent(/oct, \d{2}:\d{2}:/);
+  });
+
+  it("sin cambios dice cuándo se solicitó", () => {
+    render(<HistorialCita cita={{ creadaEn: "2026-10-01", historial: [] }} nombre={nombre} />);
+
+    expect(screen.getByText(/Solicitada el 1 de octubre de 2026/)).toBeInTheDocument();
   });
 });
