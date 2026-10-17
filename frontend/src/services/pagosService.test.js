@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listarPagos, obtenerPago, procesarPago } from "./pagosService.js";
+import { listarPagos, obtenerPago, procesarPago, reembolsarPagoSinCita } from "./pagosService.js";
 import { listar } from "../data/pagosData.js";
 
 const tarjeta = {
@@ -72,5 +72,22 @@ describe("pagosService: listarPagos", () => {
     expect(await listarPagos()).toHaveLength(5);
     const deDos = await listarPagos({ citaIds: ["C0001", "C0003"] });
     expect(deDos.map((p) => p.citaId).sort()).toEqual(["C0001", "C0003"]);
+  });
+});
+
+describe("pagosService: reembolsarPagoSinCita (RN-08, RN-35)", () => {
+  it("devuelve un pago aprobado que no alcanzó a tener cita", async () => {
+    const { pagoId } = await procesarPago(tarjeta);
+
+    expect((await reembolsarPagoSinCita(pagoId)).estado).toBe("REEMBOLSADO");
+    expect((await obtenerPago(pagoId)).estado).toBe("REEMBOLSADO");
+  });
+
+  it("no toca un pago que ya tiene cita, uno rechazado ni uno que no existe", async () => {
+    await expect(reembolsarPagoSinCita("P0001")).rejects.toThrow("Solo se reembolsa");
+    const { pagoId } = await procesarPago({ ...tarjeta, numero: "4000 0000 0000 0002" });
+    await expect(reembolsarPagoSinCita(pagoId)).rejects.toThrow("Solo se reembolsa");
+    await expect(reembolsarPagoSinCita("P9999")).rejects.toThrow("no existe");
+    expect((await obtenerPago("P0001")).estado).toBe("APROBADO");
   });
 });

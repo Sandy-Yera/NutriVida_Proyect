@@ -21,6 +21,19 @@ export async function procesarPago({ titular, numero, vencimiento, cvv, monto })
   return { estado, pagoId: pago.id, motivo };
 }
 
+// RN-08 y RN-35: si el pago se aprobó pero la cita no se pudo crear (por ejemplo, otro paciente
+// tomó la hora en ese instante), el pago se devuelve. Solo aplica a un pago APROBADO sin cita:
+// el reembolso de una cita cancelada lo hace citasService.cambiarEstado.
+// Es una función nueva: no cambia el contrato.
+export async function reembolsarPagoSinCita(id) {
+  const pago = pagosData.obtener(id);
+  if (!pago) throw new Error(`El pago ${id} no existe.`);
+  if (pago.estado !== "APROBADO" || pago.citaId) {
+    throw new Error("Solo se reembolsa un pago aprobado que no quedó asociado a una cita.");
+  }
+  return pagosData.actualizar(id, { estado: "REEMBOLSADO" });
+}
+
 export async function obtenerPago(id) {
   return pagosData.obtener(id);
 }
