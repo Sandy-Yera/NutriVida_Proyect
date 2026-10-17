@@ -99,14 +99,21 @@ export async function reprogramarCita(id, fecha, hora, usuarioId) {
 }
 
 // RN-10 a RN-12: horas libres del nutricionista ese día, sin choques ni horas pasadas.
-// duracionMin es un tercer parámetro opcional: no cambia el contrato.
-export async function horariosDisponibles(nutricionistaId, fecha, duracionMin = 30) {
+// duracionMin e idExcluido son parámetros opcionales: no cambian el contrato.
+// idExcluido sirve para reprogramar: la propia cita no ocupa su horario (igual que en reprogramarCita).
+export async function horariosDisponibles(
+  nutricionistaId,
+  fecha,
+  duracionMin = 30,
+  idExcluido = null,
+) {
   const [citas, nutricionista] = await Promise.all([
     citasData.listar(),
     obtenerNutricionista(nutricionistaId),
   ]);
   if (!nutricionista) return [];
-  return citasUtils.horariosDisponibles(nutricionista, fecha, citas, duracionMin, new Date());
+  const otras = citas.filter((c) => c.id !== idExcluido);
+  return citasUtils.horariosDisponibles(nutricionista, fecha, otras, duracionMin, new Date());
 }
 
 // Agenda rápida del Inicio (Catalina): las próximas horas libres de cualquier nutricionista.

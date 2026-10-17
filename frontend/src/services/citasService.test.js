@@ -212,6 +212,23 @@ describe("citasService: estadisticas", () => {
   });
 });
 
+describe("citasService: horariosDisponibles al reprogramar", () => {
+  it("con idExcluido, la propia cita no ocupa su horario", async () => {
+    const propia = crear({
+      pacienteId: "U102",
+      nutricionistaId: "NUT003",
+      servicioCodigo: "CN001",
+      motivo: "Primera consulta de prueba",
+      fecha: "2030-01-07",
+      hora: "09:00",
+      duracionMin: 50,
+    });
+
+    expect(await horariosDisponibles("NUT003", "2030-01-07", 50)).not.toContain("09:30");
+    expect(await horariosDisponibles("NUT003", "2030-01-07", 50, propia.id)).toContain("09:30");
+  });
+});
+
 describe("citasService: horariosDisponibles", () => {
   // 2030-01-07 es lunes: Daniela (NUT003) atiende de 08:00 a 13:00.
   it("devuelve las horas libres de la jornada en un día que atiende", async () => {
