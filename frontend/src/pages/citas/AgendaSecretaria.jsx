@@ -96,7 +96,9 @@ export default function AgendaSecretaria() {
     ahora,
   });
 
-  if (!base || !citas) {
+  // Solo la primera carga reemplaza la página. Al cambiar de día, la barra de herramientas se
+  // mantiene y solo la grilla muestra "Cargando" (no se pierde el foco del botón).
+  if (!base) {
     return (
       <section className="container py-4">
         <h1>Agenda de la clínica</h1>
@@ -108,9 +110,11 @@ export default function AgendaSecretaria() {
   const nombre = (id) => base.nombres[id] ?? id;
   const servicioDe = (cita) => base.servicios.find((s) => s.codigo === cita.servicioCodigo);
   const nutricionistaDe = (cita) => base.nutricionistas.find((n) => n.id === cita.nutricionistaId);
-  const visibles = filtro ? citas.filter((c) => c.estado === filtro) : citas;
+  const cargando = !citas;
+  const delDiaActual = citas ?? [];
+  const visibles = filtro ? delDiaActual.filter((c) => c.estado === filtro) : delDiaActual;
   const filas = armarAgenda(base.nutricionistas, fecha, visibles);
-  const pendientes = citas.filter((c) => c.estado === "PENDIENTE").length;
+  const pendientes = delDiaActual.filter((c) => c.estado === "PENDIENTE").length;
 
   function irA(nuevaFecha) {
     if (!nuevaFecha) return;
@@ -232,7 +236,7 @@ export default function AgendaSecretaria() {
           </select>
         </div>
         <p className="mb-0 ms-md-auto" aria-live="polite">
-          Pendientes del día: <strong>{pendientes}</strong>
+          Pendientes del día: <strong>{cargando ? "…" : pendientes}</strong>
         </p>
       </div>
 
@@ -249,24 +253,29 @@ export default function AgendaSecretaria() {
 
       <div className="row g-3">
         <div className="col-12 col-lg-8">
-          {visibles.length === 0 && (
-            <p className="text-body-secondary">
-              {filtro
-                ? `No hay citas en estado ${ETIQUETAS_ESTADO[filtro].toLowerCase()} este día.`
-                : "No hay citas este día."}
-            </p>
+          {cargando && <p role="status">Cargando la agenda...</p>}
+          {!cargando && (
+            <>
+              {visibles.length === 0 && (
+                <p className="text-body-secondary">
+                  {filtro
+                    ? `No hay citas en estado ${ETIQUETAS_ESTADO[filtro].toLowerCase()} este día.`
+                    : "No hay citas este día."}
+                </p>
+              )}
+              <GrillaAgenda
+                filas={filas}
+                nutricionistas={base.nutricionistas}
+                pacientes={base.nombres}
+                seleccionadaId={seleccionadaId}
+                onSeleccionar={(id) => {
+                  setSeleccionadaId(id);
+                  setReprogramando(null);
+                  setAviso(null);
+                }}
+              />
+            </>
           )}
-          <GrillaAgenda
-            filas={filas}
-            nutricionistas={base.nutricionistas}
-            pacientes={base.nombres}
-            seleccionadaId={seleccionadaId}
-            onSeleccionar={(id) => {
-              setSeleccionadaId(id);
-              setReprogramando(null);
-              setAviso(null);
-            }}
-          />
         </div>
 
         <div className="col-12 col-lg-4">

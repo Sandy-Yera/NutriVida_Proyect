@@ -164,6 +164,8 @@ describe("AgendaSecretaria (S-06)", () => {
 
     await screen.findByRole("table", { name: "Agenda del día" });
     fireEvent.click(screen.getByRole("button", { name: "Día siguiente" }));
+    // Mientras cargan las citas del nuevo día, la barra de herramientas sigue en pantalla.
+    expect(screen.getByRole("button", { name: "Día siguiente" })).toBeInTheDocument();
 
     expect(await screen.findByRole("heading", { name: "8 de enero de 2030" })).toBeInTheDocument();
     expect(
