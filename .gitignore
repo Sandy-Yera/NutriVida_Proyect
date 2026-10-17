@@ -14,4 +14,4 @@ logs/
 .DS_Store
 *.md
 !/README.md
-!/PENDIENTE.md
+!ers/*
