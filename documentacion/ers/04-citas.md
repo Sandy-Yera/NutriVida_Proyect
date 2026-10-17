@@ -31,7 +31,7 @@ Estados: `PENDIENTE`, `CONFIRMADA`, `ATENDIDA`, `CANCELADA` e `INASISTENCIA`.
 
 - Toda cita nace PENDIENTE, después de un pago aprobado (RN-03).
 - Reprogramar no es un cambio de estado: es una operación aparte que deja la cita en PENDIENTE con la nueva fecha y hora, y solo se permite desde PENDIENTE o CONFIRMADA (RN-05).
-- Cada cambio de estado y cada reprogramación agrega una entrada al historial de la cita: `{ fecha, de, a, por }` (RN-04).
+- Cada cambio de estado y cada reprogramación agrega una entrada al historial de la cita: `{ fecha, de, a, por }` (RN-04). Como ninguna transición lleva a PENDIENTE, una entrada que termina en PENDIENTE se muestra como "Reprogramada (Confirmada → Pendiente)".
 - Al cancelar una cita, su pago pasa a REEMBOLSADO (RN-08).
 
 ## 4.4 Requisitos funcionales
@@ -242,7 +242,7 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 - `data/reservaData.test.js`: la reserva en `sessionStorage`, de un solo paciente y sin campos extra.
 - `services/citasService.test.js`: filtros, reembolso al cancelar, reprogramar, estadísticas, horas libres y las reglas repetidas en `crearCita` (RN-13, RN-16, RN-35), con el reloj fijo.
 - `services/pagosService.test.js`: pago aprobado y rechazado, errores por campo y reembolso de un pago sin cita.
-- `components/citas/ComponentesCita.test.jsx`: `ChipEstado`, `PasosWizard` y `ResumenCita`.
+- `components/citas/ComponentesCita.test.jsx`: `ChipEstado`, `PasosWizard`, `ResumenCita` y `HistorialCita` (quién hizo cada cambio y rótulo de la reprogramación).
 - `pages/citas/SolicitarCita.test.jsx`: parámetros de la URL, talleres fuera, teleconsulta, fecha pasada, horas ocupadas, recorrido completo hasta el pago y F5.
 - `pages/citas/Pago.test.jsx` y `PagoResultado.test.jsx`: pago aprobado, botón deshabilitado, validación, errores del service, reembolso, reserva inválida, pantalla de éxito solo con citas propias y pantalla de error.
 - `pages/citas/MisCitas.test.jsx`: pestañas, citas propias, recordatorio, regla de 24 h, cancelar con reembolso, reprogramar y estado vacío.
@@ -250,6 +250,7 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 - `components/citas/GrillaAgenda.test.jsx`: pestañas por nutricionista en el móvil y aviso de la cita elegida.
 - `pages/citas/admin/AdminCitas.test.jsx` y `AdminCitaDetalle.test.jsx`: lista con el total, total sin reembolsos ni rechazos, filtros por estado, nutricionista y fechas, rango al revés, comprobante con los 4 últimos dígitos, historial y cita inexistente.
 - `pages/citas/AgendaNutricionista.test.jsx`: solo sus citas, marcar atendida con el historial, inasistencia con diálogo, pendiente sin acciones, enlace a la ficha, vista semana y navegación.
+- `pages/citas/RecorridoCitas.test.jsx`: recorrido completo sobre la app real, sin mocks y con los usuarios demo. Ana paga con la tarjeta rechazada y después con la aprobada; Marta confirma; Daniela marca la cita atendida; el admin ve el historial y el comprobante; la teleconsulta queda habilitada. También cubre la cancelación de Tomás con reembolso, que baja el total del admin, y la protección de las rutas por rol. Además falla si React muestra cualquier advertencia en la consola.
 
 ## 4.10 Trazabilidad
 
