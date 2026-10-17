@@ -8,7 +8,7 @@ El módulo es el "pedido" del caso: el flujo completo de una cita, desde que el 
 
 El módulo no administra servicios ni nutricionistas: los lee del módulo clínico (`serviciosService`). Tampoco maneja la sesión: la lee del módulo de acceso (`auth.js`).
 
-**Estado en esta versión:** RF-CIT-01 a 06 y RF-CIT-09 están construidos y probados. RF-CIT-07 y 08 (agenda del nutricionista y vista del administrador, tareas S-07 y S-08) se completan antes de la integración; sus pruebas se agregan con ellas.
+**Estado en esta versión:** RF-CIT-01 a 07 y RF-CIT-09 están construidos y probados. RF-CIT-08 (vista del administrador, tarea S-08) se completa antes de la integración; sus pruebas se agregan con ella.
 
 ## 4.2 Actores
 
@@ -141,13 +141,17 @@ Estados: `PENDIENTE`, `CONFIRMADA`, `ATENDIDA`, `CANCELADA` e `INASISTENCIA`.
 - **Descripción:** el nutricionista ve sus citas del día y de la semana, y registra si el paciente asistió.
 - **Actores:** nutricionista.
 - **Prioridad:** alta.
-- **Vista:** `/nutricionista/agenda` (`AgendaNutricionista.jsx`). Tarea S-07.
+- **Vista:** `/nutricionista/agenda` (`AgendaNutricionista.jsx`, con `ChipEstado` y `DialogoConfirmacion`).
 - **Reglas:**
-  - Solo ve sus citas, según el `nutricionistaId` de la sesión (RN-26).
-  - Acciones Marcar atendida y Marcar inasistencia, según las transiciones permitidas (RN-02).
-  - El enlace "Abrir ficha" lleva a `/nutricionista/pacientes/:pacienteId` (contrato con el módulo clínico).
+  - Solo ve sus citas, según el `nutricionistaId` de la sesión. Si su usuario no está vinculado a un nutricionista, se le pide que hable con el administrador (RN-26).
+  - Dos vistas: Día y Semana (lunes a sábado, agrupada por día), con navegación anterior, hoy y siguiente. Al cambiar de día o de vista, la barra de navegación se mantiene y solo la lista muestra "Cargando".
+  - Cada cita muestra la hora, el paciente, el servicio, el motivo y su estado.
+  - Solo una cita CONFIRMADA se marca como atendida o inasistencia (RN-02). Una cita PENDIENTE muestra "Pendiente de confirmación de la secretaría.".
+  - Marcar atendida se aplica directo (es lo habitual al terminar la consulta); Marcar inasistencia pide confirmación, porque no se puede deshacer. Cada cambio queda en el historial con el nutricionista que lo hizo (RN-04).
+  - El enlace "Abrir ficha" lleva a `/nutricionista/pacientes/:pacienteId`, con el id del usuario paciente (contrato con el módulo clínico).
+- **Mensajes (role="status"):** "Cita marcada como atendida." e "Inasistencia registrada.".
 - **Criterio de aceptación:** Daniela Morales ve solo sus citas y desde una de ellas llega a la ficha del paciente.
-- **Pruebas:** se agregan con S-07.
+- **Pruebas:** `AgendaNutricionista.test.jsx`, y `accionesNutricionista` y `diasDeLaSemana` en `utils/citas.test.js`.
 
 ### RF-CIT-08 Administrador: listado de citas y comprobante del pago
 
@@ -241,6 +245,7 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 - `pages/citas/MisCitas.test.jsx`: pestañas, citas propias, recordatorio, regla de 24 h, cancelar con reembolso, reprogramar y estado vacío.
 - `pages/citas/AgendaSecretaria.test.jsx`: grilla del día con "—" y continuación, acciones según el estado, confirmar con historial, inasistencia y cancelación con diálogo, reprogramar sin el límite de 24 h, filtro, navegación por día y sin enlaces a fichas.
 - `components/citas/GrillaAgenda.test.jsx`: pestañas por nutricionista en el móvil y aviso de la cita elegida.
+- `pages/citas/AgendaNutricionista.test.jsx`: solo sus citas, marcar atendida con el historial, inasistencia con diálogo, pendiente sin acciones, enlace a la ficha, vista semana y navegación.
 
 ## 4.10 Trazabilidad
 
@@ -252,7 +257,7 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 | RF-CIT-04 | `/mis-citas` | `MisCitas`, `TarjetaCita`, `PanelReprogramar`, `DialogoConfirmacion`, `puedeCancelar`, `cambiarEstado`, `reprogramarCita` | `MisCitas.test.jsx`, `citas.test.js`, `citasService.test.js` |
 | RF-CIT-05 | `/mis-citas` | `MisCitas`, `necesitaRecordatorio` | `MisCitas.test.jsx`, `citas.test.js` |
 | RF-CIT-06 | `/secretaria/agenda` | `AgendaSecretaria`, `GrillaAgenda`, `PanelReprogramar`, `armarAgenda`, `accionesSecretaria`, `TRANSICIONES` | S-T2, `AgendaSecretaria.test.jsx`, `GrillaAgenda.test.jsx`, `citas.test.js` |
-| RF-CIT-07 | `/nutricionista/agenda` | `AgendaNutricionista` | Con S-07 |
+| RF-CIT-07 | `/nutricionista/agenda` | `AgendaNutricionista`, `accionesNutricionista`, `diasDeLaSemana` | `AgendaNutricionista.test.jsx`, `citas.test.js` |
 | RF-CIT-08 | `/admin/citas`, `/admin/citas/:id` | `AdminCitas`, `AdminCitaDetalle`, `totalRecaudado`, `obtenerPago` | `pagos.test.js`; las demás, con S-08 |
 | RF-CIT-09 | `/citas/solicitar` | `puedeAgendarTeleconsulta` (util y service), `crearCita` | `SolicitarCita.test.jsx`, `citasService.test.js`, `citas.test.js` |
 
