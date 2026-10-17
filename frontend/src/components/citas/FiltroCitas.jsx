@@ -7,7 +7,12 @@ export default function FiltroCitas({ filtros, nutricionistas, onCambiar }) {
   }
 
   return (
-    <form className="row g-2 mb-3" role="search" onSubmit={(evento) => evento.preventDefault()}>
+    <form
+      noValidate
+      className="row g-2 mb-3"
+      role="search"
+      onSubmit={(evento) => evento.preventDefault()}
+    >
       <div className="col-6 col-md-3">
         <label htmlFor="filtro-estado" className="form-label small mb-1">
           Estado

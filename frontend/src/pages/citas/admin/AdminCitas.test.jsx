@@ -70,6 +70,8 @@ describe("AdminCitas (S-08)", () => {
     renderizar();
 
     await screen.findByText("5 citas");
+    // RN-31: la validación es de la app, no del navegador.
+    expect(screen.getByRole("search")).toHaveAttribute("novalidate");
     fireEvent.change(screen.getByLabelText("Desde"), { target: { value: "2099-01-01" } });
     expect(
       await screen.findByText("No hay citas que coincidan con los filtros."),
