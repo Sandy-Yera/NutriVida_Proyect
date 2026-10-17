@@ -8,7 +8,7 @@ El módulo es el "pedido" del caso: el flujo completo de una cita, desde que el 
 
 El módulo no administra servicios ni nutricionistas: los lee del módulo clínico (`serviciosService`). Tampoco maneja la sesión: la lee del módulo de acceso (`auth.js`).
 
-**Estado en esta versión:** RF-CIT-01 a 05 y RF-CIT-09 están construidos y probados. RF-CIT-06 a 08 (agendas y vista del administrador, tareas S-06 a S-08) se completan antes de la integración; sus pruebas se agregan con ellas.
+**Estado en esta versión:** RF-CIT-01 a 06 y RF-CIT-09 están construidos y probados. RF-CIT-07 y 08 (agenda del nutricionista y vista del administrador, tareas S-07 y S-08) se completan antes de la integración; sus pruebas se agregan con ellas.
 
 ## 4.2 Actores
 
@@ -95,7 +95,7 @@ Estados: `PENDIENTE`, `CONFIRMADA`, `ATENDIDA`, `CANCELADA` e `INASISTENCIA`.
 - **Descripción:** el paciente ve sus citas en dos pestañas, Próximas e Historial, y puede cancelar o reprogramar las próximas.
 - **Actores:** paciente.
 - **Prioridad:** alta.
-- **Vista:** `/mis-citas` (`MisCitas.jsx` con `TarjetaCita`, `SelectorHorario` y `DialogoConfirmacion`). Es la vista a la que llega el paciente después del login y del registro.
+- **Vista:** `/mis-citas` (`MisCitas.jsx` con `TarjetaCita`, `PanelReprogramar` (que usa `SelectorHorario`) y `DialogoConfirmacion`). Es la vista a la que llega el paciente después del login y del registro.
 - **Reglas:**
   - Solo se muestran las citas del paciente en sesión (RN-24).
   - Próximas: las PENDIENTE y CONFIRMADA que no han empezado, de la más cercana a la más lejana. Historial: todas las demás, de la más reciente a la más antigua.
@@ -123,15 +123,18 @@ Estados: `PENDIENTE`, `CONFIRMADA`, `ATENDIDA`, `CANCELADA` e `INASISTENCIA`.
 - **Descripción:** la secretaria ve la agenda del día de los 4 nutricionistas y gestiona las citas.
 - **Actores:** secretaria y administrador.
 - **Prioridad:** alta.
-- **Vista:** `/secretaria/agenda` (`AgendaSecretaria.jsx` con `GrillaAgenda`). Tarea S-06.
+- **Vista:** `/secretaria/agenda` (`AgendaSecretaria.jsx` con `GrillaAgenda`, `PanelReprogramar`, `ChipEstado` y `DialogoConfirmacion`).
 - **Reglas:**
-  - Escritorio: filas por bloque y una columna por nutricionista. Móvil: una pestaña por nutricionista. Los bloques fuera de la jornada se muestran con "—" (RN-33).
-  - Navegación por día, filtro por estado y contador de pendientes.
-  - Al tocar una cita se abre un panel con el paciente, el servicio, el motivo y el historial. Las acciones (Confirmar, Reprogramar, Cancelar y Marcar inasistencia) salen de las transiciones permitidas para su estado (RN-02, RN-25).
-  - La secretaria no tiene el límite de 24 h: gestiona las ausencias de los nutricionistas.
-  - La secretaria no ve fichas ni mediciones (RN-25).
+  - Escritorio: filas por bloque de 30 min, desde la primera hora de inicio hasta la última de término del equipo, y una columna por nutricionista. Móvil: una pestaña por nutricionista. Los bloques fuera de la jornada se muestran con "—"; el segundo bloque de una consulta de 50 min, con "↳ continúa" (RN-09, RN-11, RN-33).
+  - Navegación por día (día anterior, hoy, día siguiente y calendario), filtro por estado y contador de pendientes del día.
+  - Al tocar una cita se abre un panel con el paciente, el servicio, el nutricionista, la fecha, el motivo y el historial (cada cambio con fecha, estado anterior, estado nuevo y quién lo hizo) (RN-04).
+  - Las acciones salen de las transiciones permitidas para el estado de la cita, sin Marcar atendida, que es del nutricionista: PENDIENTE ofrece Confirmar y Cancelar; CONFIRMADA ofrece Marcar inasistencia y Cancelar; ambas ofrecen Reprogramar. Los estados finales muestran "Estado final: esta cita ya no cambia." (RN-02, RN-25).
+  - Cancelar y Marcar inasistencia piden confirmación en un diálogo, porque no se pueden deshacer. Al cancelar, el pago queda REEMBOLSADO (RN-08).
+  - La secretaria no tiene el límite de 24 h: gestiona las ausencias de los nutricionistas (RN-05, RN-06).
+  - La secretaria no ve fichas ni mediciones: la agenda no tiene enlaces a la ficha (RN-25).
+- **Mensajes (role="status"):** "Cita confirmada.", "Inasistencia registrada.", "Cita cancelada. El pago quedó reembolsado." y "Cita reprogramada para el … a las …. Queda pendiente.".
 - **Criterio de aceptación:** desde la cuenta de Marta Ríos se confirma la cita C0004 y se marca una inasistencia.
-- **Pruebas:** se agregan con S-06.
+- **Pruebas:** `AgendaSecretaria.test.jsx`, `GrillaAgenda.test.jsx`, y `armarAgenda` y `accionesSecretaria` en `utils/citas.test.js`.
 
 ### RF-CIT-07 Nutricionista: agenda propia, marcar atendida y abrir la ficha
 
@@ -236,6 +239,8 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 - `pages/citas/SolicitarCita.test.jsx`: parámetros de la URL, talleres fuera, teleconsulta, fecha pasada, horas ocupadas, recorrido completo hasta el pago y F5.
 - `pages/citas/Pago.test.jsx` y `PagoResultado.test.jsx`: pago aprobado, botón deshabilitado, validación, errores del service, reembolso, reserva inválida, pantalla de éxito solo con citas propias y pantalla de error.
 - `pages/citas/MisCitas.test.jsx`: pestañas, citas propias, recordatorio, regla de 24 h, cancelar con reembolso, reprogramar y estado vacío.
+- `pages/citas/AgendaSecretaria.test.jsx`: grilla del día con "—" y continuación, acciones según el estado, confirmar con historial, inasistencia y cancelación con diálogo, reprogramar sin el límite de 24 h, filtro, navegación por día y sin enlaces a fichas.
+- `components/citas/GrillaAgenda.test.jsx`: pestañas por nutricionista en el móvil y aviso de la cita elegida.
 
 ## 4.10 Trazabilidad
 
@@ -244,9 +249,9 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 | RF-CIT-01 | `/citas/solicitar` | `SolicitarCita`, `PasosWizard`, `ResumenCita`, `ChipEstado`, `reservaData`, `primerPasoIncompleto`, `validarMotivo`, `validarFechaCita` | `SolicitarCita.test.jsx`, `ComponentesCita.test.jsx`, `reservaData.test.js`, `citas.test.js` |
 | RF-CIT-02 | `/citas/solicitar`, `/mis-citas` | `SelectorHorario`, `generarBloques`, `horariosDisponibles`, `horasNoElegibles` | S-T1, S-T3, `citas.test.js`, `citasService.test.js` |
 | RF-CIT-03 | `/citas/pago`, `/citas/pago/exito/:citaId`, `/citas/pago/error` | `Pago`, `FormPago`, `PagoExitoso`, `PagoError`, `procesarPago`, `crearCita`, `reembolsarPagoSinCita` | S-T4, `Pago.test.jsx`, `PagoResultado.test.jsx`, `pagos.test.js`, `pagosService.test.js` |
-| RF-CIT-04 | `/mis-citas` | `MisCitas`, `TarjetaCita`, `DialogoConfirmacion`, `puedeCancelar`, `cambiarEstado`, `reprogramarCita` | `MisCitas.test.jsx`, `citas.test.js`, `citasService.test.js` |
+| RF-CIT-04 | `/mis-citas` | `MisCitas`, `TarjetaCita`, `PanelReprogramar`, `DialogoConfirmacion`, `puedeCancelar`, `cambiarEstado`, `reprogramarCita` | `MisCitas.test.jsx`, `citas.test.js`, `citasService.test.js` |
 | RF-CIT-05 | `/mis-citas` | `MisCitas`, `necesitaRecordatorio` | `MisCitas.test.jsx`, `citas.test.js` |
-| RF-CIT-06 | `/secretaria/agenda` | `AgendaSecretaria`, `GrillaAgenda`, `TRANSICIONES` | S-T2; las demás, con S-06 |
+| RF-CIT-06 | `/secretaria/agenda` | `AgendaSecretaria`, `GrillaAgenda`, `PanelReprogramar`, `armarAgenda`, `accionesSecretaria`, `TRANSICIONES` | S-T2, `AgendaSecretaria.test.jsx`, `GrillaAgenda.test.jsx`, `citas.test.js` |
 | RF-CIT-07 | `/nutricionista/agenda` | `AgendaNutricionista` | Con S-07 |
 | RF-CIT-08 | `/admin/citas`, `/admin/citas/:id` | `AdminCitas`, `AdminCitaDetalle`, `totalRecaudado`, `obtenerPago` | `pagos.test.js`; las demás, con S-08 |
 | RF-CIT-09 | `/citas/solicitar` | `puedeAgendarTeleconsulta` (util y service), `crearCita` | `SolicitarCita.test.jsx`, `citasService.test.js`, `citas.test.js` |
