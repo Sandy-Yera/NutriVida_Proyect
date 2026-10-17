@@ -14,4 +14,3 @@ logs/
 .DS_Store
 *.md
 !/README.md
-!ers/*
