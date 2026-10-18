@@ -7,9 +7,9 @@ function diaHabil(dias, n) {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+const L_V = [1, 2, 3, 4, 5];
 const LMV = [1, 3, 5];
 const MJS = [2, 4, 6];
-const LV = [1, 2, 3, 4, 5];
 
 export const citasSemilla = [
   {
@@ -59,7 +59,7 @@ export const citasSemilla = [
     pacienteId: "U102",
     nutricionistaId: "NUT003",
     servicioCodigo: "CN001",
-    fecha: diaHabil(LV, 2),
+    fecha: diaHabil(L_V, 2),
     hora: "08:30",
     duracionMin: 50,
     motivo: "Quiero empezar una alimentación vegana",
