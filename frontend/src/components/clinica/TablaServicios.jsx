@@ -51,7 +51,7 @@ function resumen(servicio) {
 export default function TablaServicios({ servicios, onEditar, onCambiarEstado }) {
   return (
     <>
-      <table className="table align-middle bg-white mb-0 d-none d-lg-table">
+      <table className="table align-middle bg-white mb-0 d-none d-xl-table">
         <caption className="visually-hidden">Servicios del catálogo</caption>
         <thead>
           <tr>
@@ -97,7 +97,7 @@ export default function TablaServicios({ servicios, onEditar, onCambiarEstado })
           ))}
         </tbody>
       </table>
-      <ul className="list-unstyled mb-0 d-lg-none" aria-label="Servicios del catálogo">
+      <ul className="list-unstyled mb-0 d-xl-none" aria-label="Servicios del catálogo">
         {servicios.map((servicio) => (
           <li key={servicio.codigo} className="bg-white border rounded-3 p-3 mb-2">
             <div className="d-flex justify-content-between align-items-start gap-2">
