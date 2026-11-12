@@ -94,7 +94,8 @@ try {
             $detalle = 'no compiló o Maven falló'
         }
         if ($codigo -ne 0) {
-            $fallas = ([regex]::Matches($texto, '(?m)^\[ERROR\].*?(<<< FAIL|COMPILATION ERROR|\.java:\[\d+).*$') |
+            # Resumen de Surefire ("Clase.prueba » causa" o "Clase.prueba:42 esperado…") o error de compilación.
+            $fallas = ([regex]::Matches($texto, '(?m)^\[ERROR\]\s{2,}\S+\.\S+(:\d+)?\s.*$|^\[ERROR\].*\.java:\[\d+.*$') |
                 Select-Object -First 5 | ForEach-Object { $_.Value.Trim() }) -join ' | '
             if ($fallas) { $detalle += " :: $fallas" }
             $detalle += " (log: $log)"
