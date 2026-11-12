@@ -4,6 +4,8 @@
 
 .DESCRIPTION
   1. backend  : pruebas JUnit de ms-citas, dentro de Docker con Java 21 (igual que la imagen).
+  1b. mutantes: PIT (pruebas mutantes) sobre la lógica de cálculo de ms-citas. Falla si sobrevive
+                un mutante que no esté en la lista de equivalentes conocidos.
   2. frontend : pruebas de Vitest (modo local); deben seguir pasando todas.
   3. docker   : docker compose up -d --build, recarga SOLO el esquema nutrivida_citas con
                 database/02_citas.sql (no borra el volumen ni toca los otros dos esquemas),
@@ -18,12 +20,13 @@
 .EXAMPLE
   .\scripts\verificar.ps1                     # todo
   .\scripts\verificar.ps1 -Solo backend       # solo JUnit de ms-citas
+  .\scripts\verificar.ps1 -Solo mutantes      # solo PIT (reporte en backend\ms-citas\target\pit-reports)
   .\scripts\verificar.ps1 -Solo frontend      # solo Vitest
   .\scripts\verificar.ps1 -Solo docker        # compose + esquema de citas + humo
   .\scripts\verificar.ps1 -SinRecargarCitas   # no reinicia los datos de nutrivida_citas
 #>
 param(
-    [ValidateSet('todo', 'backend', 'frontend', 'docker')]
+    [ValidateSet('todo', 'backend', 'mutantes', 'frontend', 'docker')]
     [string]$Solo = 'todo',
     [switch]$SinRecargarCitas
 )
@@ -103,6 +106,43 @@ try {
             $detalle += " (log: $log)"
         }
         Anotar 'JUnit ms-citas' ($codigo -eq 0) $detalle
+    }
+
+    # ---------------------------------------------------------------- 1b. pruebas mutantes
+    if ($Solo -in 'todo', 'mutantes') {
+        Write-Host "`n== Mutantes: PIT sobre la lógica de cálculo de ms-citas" -ForegroundColor Cyan
+        $ms = Join-Path $raiz 'backend\ms-citas'
+        $log = Log 'mutantes'
+        & docker run --rm -v "${ms}:/app" -v nutrivida-m2:/root/.m2 -w /app `
+            maven:3.9-eclipse-temurin-21 mvn -B test-compile org.pitest:pitest-maven:mutationCoverage 2>&1 |
+            Out-File -Encoding utf8 $log
+        $codigo = $LASTEXITCODE
+        $xmlPit = Join-Path $ms 'target\pit-reports\mutations.xml'
+        if ($codigo -ne 0 -or -not (Test-Path $xmlPit)) {
+            Anotar 'Mutantes (PIT)' $false "PIT no terminó (log: $log)"
+        } else {
+            # Mutantes equivalentes conocidos: cambian el código pero no el resultado, así que ninguna
+            # prueba puede matarlos. La razón de cada uno está en el comentario de ReglasPago.pasaLuhn.
+            $equivalentes = @(
+                'ReglasPago.pasaLuhn|changed conditional boundary',
+                'ReglasPago.pasaLuhn|Replaced integer addition with subtraction')
+            $mutantes = @(([xml](Get-Content $xmlPit -Raw -Encoding UTF8)).mutations.mutation)
+            $muertos = @($mutantes | Where-Object { $_.status -in 'KILLED', 'TIMED_OUT' }).Count
+            $vivos = @($mutantes | Where-Object { $_.status -notin 'KILLED', 'TIMED_OUT' } | ForEach-Object {
+                    [pscustomobject]@{
+                        Clave = ($_.mutatedClass -replace '^.*\.', '') + '.' + $_.mutatedMethod + '|' + $_.description
+                        Texto = "{0}.{1} L{2}: {3} ({4})" -f ($_.mutatedClass -replace '^.*\.', ''), $_.mutatedMethod,
+                            $_.lineNumber, $_.description, $_.status
+                    } })
+            $inesperados = @($vivos | Where-Object { $equivalentes -notcontains $_.Clave })
+            $pct = if ($mutantes.Count) { [math]::Floor(100 * $muertos / $mutantes.Count) } else { 0 }
+            $detalle = "{0} mutantes, {1} muertos ({2} %), {3} equivalentes conocidos" -f $mutantes.Count, $muertos, $pct, ($vivos.Count - $inesperados.Count)
+            if ($inesperados.Count -gt 0) {
+                $detalle += " :: SOBREVIVEN " + (($inesperados | Select-Object -First 5 | ForEach-Object Texto) -join ' | ')
+                $detalle += " (reporte: backend\ms-citas\target\pit-reports\index.html)"
+            }
+            Anotar 'Mutantes (PIT)' ($inesperados.Count -eq 0) $detalle
+        }
     }
 
     # ---------------------------------------------------------------- 2. frontend

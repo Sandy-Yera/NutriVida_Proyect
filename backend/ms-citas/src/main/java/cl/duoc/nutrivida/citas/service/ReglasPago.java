@@ -39,12 +39,17 @@ public final class ReglasPago {
     /** Lo único que se guarda de la tarjeta (pago.ultimos4). */
     public static String ultimos4(String numero) {
         String digitos = soloDigitos(numero);
-        return digitos.length() <= 4 ? digitos : digitos.substring(digitos.length() - 4);
+        return digitos.substring(Math.max(0, digitos.length() - 4));   // "42" → "42"
     }
 
     /**
      * Algoritmo de Luhn: desde el último dígito, se duplica uno de cada dos; si el doble pasa
      * de 9 se le resta 9. La suma total debe ser múltiplo de 10.
+     *
+     * Dos mutantes de PIT sobreviven aquí y son equivalentes (no cambian ningún resultado, así que
+     * ninguna prueba puede detectarlos; verificar.ps1 los acepta por nombre):
+     * "d > 9" → "d >= 9", porque un dígito duplicado es par y nunca vale 9; y "suma += d" →
+     * "suma -= d", porque -x es múltiplo de 10 exactamente cuando x lo es.
      */
     public static boolean pasaLuhn(String digitos) {
         int suma = 0;

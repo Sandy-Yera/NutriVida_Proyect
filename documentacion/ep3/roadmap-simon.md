@@ -15,9 +15,10 @@
 | 6 | **Pago y cita en un solo endpoint** | `POST /api/citas` cobra y crea en una transacción; 402 si se rechaza. |
 | 7 | **Modo dual** del frontend | `VITE_API_MODE=api/local`; las pruebas de Vitest siguen en local. |
 | 8 | **Todo ejecutable desde Docker** | `docker compose up -d --build`: MySQL + 3 microservicios + frontend con Nginx (proxy `/api`). Funciona en Windows y Linux sin Java/Maven/Node instalados. |
-| 9 | **Verificación con script** | `scripts\verificar.ps1` es la definición de terminado de cada ítem: JUnit de ms-citas (Docker, Java 21), Vitest, los 5 servicios, `validate` del esquema y peticiones de humo. Un commit por ítem, solo si da PASA. |
+| 9 | **Verificación con script** | `scripts\verificar.ps1` es la definición de terminado de cada ítem: JUnit de ms-citas (Docker, Java 21), pruebas mutantes (PIT), Vitest, los 5 servicios, `validate` del esquema y peticiones de humo. Un commit por ítem, solo si da PASA. |
 | 10 | **Modelo de ms-citas (R3)** | `pago` guarda `paciente_id`; `cita.pago_id` es `NOT NULL UNIQUE`; candado `agenda_dia` por nutricionista y día; `contador` para los IDs. Razones en "Notas para la defensa". |
 | 11 | **Cliente de ms-clinica (R6)** | `ClinicaClient` con tres implementaciones; `NUTRIVIDA_CLINICA_MODO=auto` (por defecto) usa las semillas de EP2 mientras C-31 no exista; `http` para el video y la entrega. |
+| 12 | **Pruebas mutantes (PIT)** | La lógica de cálculo de ms-citas (`ReglasCita`, `ReglasPago`, `Contador`, `Cita.registrarCambio`, `Tarjeta`, `ServicioClinica`) se prueba con PIT: 257 mutantes, 255 muertos y 2 equivalentes documentados. `verificar.ps1` falla si sobrevive uno nuevo. |
 
 ## Estado
 
@@ -97,6 +98,29 @@
 - **Tiempo máximo de 3 s.** Si ms-clinica se cuelga, la reserva no se cuelga con él. Hay una prueba con un servidor que tarda 1,5 s y un límite de 300 ms.
 - **Token.** Hoy el catálogo es público (contrato §3), pero ms-citas reenvía el token del usuario por si el equipo decide exigirlo (pendiente 1).
 - **Pruebas.** `ClinicaHttpTest` levanta un ms-clinica falso, un servidor HTTP real del JDK, y prueba lo que viaja por la red: JSON con campos de más, 404, 500, servicio apagado, tiempo agotado, 401, JSON que no calza y reenvío del token. `verificar.ps1` muestra con qué modo arrancó ms-citas y, apenas existan los endpoints de Catalina, revisa que traigan los campos que ms-citas usa.
+
+### Pruebas mutantes (PIT)
+
+- **Qué son.** La cobertura dice qué líneas se ejecutaron, no si alguna prueba revisa el resultado. PIT cambia el código compilado de a un detalle por vez (`>` por `>=`, `+` por `-`, `true` por `false`, quita un `if`) y corre las pruebas con cada cambio, llamado *mutante*. Si alguna prueba falla, el mutante está *muerto*. Si todas pasan, sobrevive: hay un error posible que ninguna prueba detectaría.
+- **Qué encontró.** Con 98 % de líneas cubiertas, la primera pasada mató el 92 %. Los mutantes que sobrevivieron mostraron pruebas que faltaban:
+  - Luhn nunca se había probado con un dígito que al duplicarse pasa de 9: las tarjetas `4242…` no lo ejercitan.
+  - Nadie probaba una jornada con medias horas. Cambiar `h*60 + m` por `h*60 - m` pasaba todas las pruebas.
+  - Faltaba una cita *antes* del período en las estadísticas.
+  - Faltaba el choque con una hora contigua libre.
+  - Faltaban los mensajes de CVV, vencimiento y titular vacíos o cortos.
+
+  Se agregaron 29 pruebas (103 en total), entre ellas los bordes exactos de 24 h y 60 días y el cambio de horario de abril, que es el caso inverso al de septiembre.
+- **También simplificó el código.** PIT mostró condiciones que no cambiaban nada, y se quitaron:
+  - `nuevo != null` en `puedeTransicionar`.
+  - El `if` de `ultimos4`.
+  - La constante `ESTADOS_QUE_OCUPAN`, que repetía `EstadoCita.ocupaAgenda()` sin que nadie la usara.
+- **Los 2 sobrevivientes son equivalentes:** cambian el código pero no el resultado, así que ninguna prueba puede matarlos. Los dos están en `pasaLuhn`:
+  - `d > 9` → `d >= 9` da lo mismo, porque un dígito duplicado es par y nunca vale 9.
+  - `suma += d` → `suma -= d` da lo mismo, porque −x es múltiplo de 10 exactamente cuando x lo es.
+
+  `verificar.ps1` los acepta por nombre y falla con cualquier otro. Se probó quitando una prueba: el paso da FALLA y nombra los mutantes vivos.
+- **Por qué solo la lógica de cálculo.** Ahí un `>=` mal puesto cuesta caro: una cita cancelable con 23 h o un cobro mal validado. Los controladores y repositorios se prueban mejor con pruebas de integración (R10); mutar getters o el arranque de Spring solo agregaría ruido.
+- **Cómo correrlo:** `.\scripts\verificar.ps1 -Solo mutantes` (cerca de 1 min). El reporte queda en `backend/ms-citas/target/pit-reports/index.html`, con cada línea en verde o rojo.
 
 ## Cambios respecto del plan semestral
 

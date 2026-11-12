@@ -101,6 +101,95 @@ class ReglasPagoTest {
         assertThat(ReglasPago.totalRecaudado(List.of())).isZero();
     }
 
+    // ------------------------------------------------------------------ casos propios (pruebas mutantes)
+
+    @Test
+    @DisplayName("Luhn con dígitos que al duplicarse pasan de 9 (las tarjetas 4242 nunca lo prueban)")
+    void luhnConDobleMayorQueNueve() {
+        assertThat(ReglasPago.pasaLuhn("79927398713")).isTrue();      // ejemplo clásico del algoritmo
+        assertThat(ReglasPago.pasaLuhn("79927398710")).isFalse();
+        assertThat(ReglasPago.validarTarjeta("5555 5555 5555 4444")).isEmpty();   // tarjeta de prueba Mastercard
+        assertThat(ReglasPago.validarTarjeta("5555 5555 5555 4445")).hasValue("El número de la tarjeta no es válido. Revísalo.");
+        assertThat(ReglasPago.pasaLuhn("59")).isTrue();     // 5·2 = 10 → 1; 1 + 9 = 10
+        assertThat(ReglasPago.pasaLuhn("18")).isTrue();     // 1·2 = 2; 2 + 8 = 10 (sin restar 9)
+    }
+
+    @Test
+    @DisplayName("Luhn detecta el cambio de un solo dígito y el intercambio de dos dígitos vecinos")
+    void luhnDetectaErroresDeTipeo() {
+        String valida = "4539148803436467";
+        assertThat(ReglasPago.pasaLuhn(valida)).isTrue();
+        for (int i = 0; i < valida.length(); i++) {
+            char original = valida.charAt(i);
+            char otro = original == '9' ? '0' : (char) (original + 1);
+            String tipeo = valida.substring(0, i) + otro + valida.substring(i + 1);
+            assertThat(ReglasPago.pasaLuhn(tipeo)).as("dígito %d cambiado", i).isFalse();
+        }
+        assertThat(ReglasPago.pasaLuhn("4539148803436476")).isFalse();   // 6 y 7 del final intercambiados
+    }
+
+    @Test
+    @DisplayName("ultimos4: con menos de 4 dígitos los devuelve todos, sin fallar; sin número, vacío")
+    void ultimos4Cortos() {
+        assertThat(ReglasPago.ultimos4("42")).isEqualTo("42");
+        assertThat(ReglasPago.ultimos4("4242")).isEqualTo("4242");
+        assertThat(ReglasPago.ultimos4(null)).isEmpty();
+        assertThat(ReglasPago.soloDigitos(" 4242-4242 ")).isEqualTo("42424242");
+    }
+
+    @Test
+    @DisplayName("titular: 2 letras no alcanza, 3 sí (sin contar espacios); CVV y vencimiento vacíos piden el dato")
+    void camposVaciosYCortos() {
+        assertThat(ReglasPago.validarTitular("Ab")).hasValue("El nombre del titular debe tener al menos 3 letras.");
+        assertThat(ReglasPago.validarTitular("  Ab  ")).hasValue("El nombre del titular debe tener al menos 3 letras.");
+        assertThat(ReglasPago.validarTitular("Ana")).isEmpty();
+        assertThat(ReglasPago.validarTitular(null)).hasValue("Ingresa el nombre del titular.");
+        assertThat(ReglasPago.validarCvv("")).hasValue("Ingresa el CVV.");
+        assertThat(ReglasPago.validarCvv(null)).hasValue("Ingresa el CVV.");
+        assertThat(ReglasPago.validarCvv(" 123 ")).isEmpty();
+        assertThat(ReglasPago.validarCvv("1234")).hasValue("El CVV debe tener 3 dígitos.");
+        assertThat(ReglasPago.validarVencimiento("", OCTUBRE_2026)).hasValue("Ingresa el vencimiento.");
+        assertThat(ReglasPago.validarVencimiento(null, OCTUBRE_2026)).hasValue("Ingresa el vencimiento.");
+    }
+
+    @Test
+    @DisplayName("vencimiento: el mes 00 no existe, 01 y 12 sí; vence al terminar el mes, también al cambiar de año")
+    void bordesDelVencimiento() {
+        LocalDate enero2027 = LocalDate.of(2027, 1, 31);
+        assertThat(ReglasPago.validarVencimiento("00/27", enero2027)).hasValue("El mes del vencimiento debe estar entre 01 y 12.");
+        assertThat(ReglasPago.validarVencimiento("01/27", enero2027)).isEmpty();           // vence hoy, último día del mes
+        assertThat(ReglasPago.validarVencimiento("12/26", enero2027)).hasValue("La tarjeta está vencida.");
+        assertThat(ReglasPago.validarVencimiento("12/26", LocalDate.of(2026, 12, 1))).isEmpty();
+        assertThat(ReglasPago.validarVencimiento(" 12/30 ", enero2027)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("el resultado de la simulación expone estado y motivo por separado")
+    void resultadoDeLaSimulacion() {
+        ReglasPago.ResultadoPago rechazo = ReglasPago.simularPago(ReglasPago.TARJETA_RECHAZADA);
+        assertThat(rechazo.estado()).isEqualTo(EstadoPago.RECHAZADO);
+        assertThat(rechazo.motivo()).isEqualTo(ReglasPago.MOTIVO_RECHAZO);
+        assertThat(ReglasPago.simularPago(null).estado()).isEqualTo(EstadoPago.APROBADO);
+        assertThat(ReglasPago.simularPago(null).motivo()).isNull();
+    }
+
+    @Test
+    @DisplayName("totalRecaudado no se desborda con montos grandes (suma en long)")
+    void totalGrande() {
+        List<Pago> pagos = List.of(pago(2_000_000_000, EstadoPago.APROBADO), pago(2_000_000_000, EstadoPago.APROBADO));
+        assertThat(ReglasPago.totalRecaudado(pagos)).isEqualTo(4_000_000_000L);
+    }
+
+    @Test
+    @DisplayName("Tarjeta.toString muestra solo los 4 últimos dígitos, y nada si el número es corto o falta")
+    void tarjetaToString() {
+        assertThat(new Tarjeta("Ana", "123", "12/27", "123").toString()).contains("numero=****]").doesNotContain("123,");
+        assertThat(new Tarjeta("Ana", null, null, null).toString()).isEqualTo("Tarjeta[titular=Ana, numero=****]");
+        assertThat(new Tarjeta("Ana", "4242-4242-4242-1234", null, "999").toString())
+                .isEqualTo("Tarjeta[titular=Ana, numero=****1234]");
+        assertThat(new Tarjeta("Ana", "4242", null, null).toString()).isEqualTo("Tarjeta[titular=Ana, numero=****4242]");
+    }
+
     static Pago pago(int monto, EstadoPago estado) {
         return new Pago("P1", "U100", monto, "4242", estado, null, OCTUBRE_2026);
     }

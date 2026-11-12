@@ -46,10 +46,6 @@ public final class ReglasCita {
     public static final String MENSAJE_24H =
             "Solo puedes cancelar o reprogramar con más de 24 horas de anticipación. Llama a la clínica.";
 
-    /** RN-10: solo estas citas ocupan horario en la agenda. */
-    public static final Set<EstadoCita> ESTADOS_QUE_OCUPAN =
-            Collections.unmodifiableSet(EnumSet.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA));
-
     /**
      * RN-02: transiciones permitidas. ATENDIDA, CANCELADA e INASISTENCIA son finales.
      * Reprogramar no es una transición: deja la cita en PENDIENTE (RN-05).
@@ -84,8 +80,9 @@ public final class ReglasCita {
 
     // ------------------------------------------------------------------ estados
 
+    /** Un estado nuevo nulo da false: EnumSet.contains(null) es false, no lanza excepción. */
     public static boolean puedeTransicionar(EstadoCita actual, EstadoCita nuevo) {
-        return actual != null && nuevo != null && TRANSICIONES.get(actual).contains(nuevo);
+        return actual != null && TRANSICIONES.get(actual).contains(nuevo);
     }
 
     public static Set<EstadoCita> transicionesDesde(EstadoCita actual) {

@@ -37,6 +37,53 @@
         <!-- Pruebas -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
+        <!-- PIT lanza las pruebas con el launcher de JUnit; la versión la fija Spring Boot -->
+        <dependency><groupId>org.junit.platform</groupId><artifactId>junit-platform-launcher</artifactId><scope>test</scope></dependency>
     </dependencies>
-    <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+    <build>
+        <plugins>
+            <plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin>
+            <!--
+              Pruebas mutantes (PIT) de la lógica de cálculo: bloques, 24 h, 60 días, estadísticas,
+              Luhn, vencimiento y correlativos. PIT cambia el código compilado (por ejemplo, > por >=,
+              + por -, true por false) y vuelve a correr las pruebas: cada cambio que ninguna prueba
+              detecta es una prueba que falta. No corre con "mvn test"; se pide aparte:
+                scripts\verificar.ps1 -Solo mutantes
+              Reporte: backend/ms-citas/target/pit-reports/index.html
+            -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>1.30.1</version>
+                <dependencies>
+                    <dependency><groupId>org.pitest</groupId><artifactId>pitest-junit5-plugin</artifactId><version>1.2.3</version></dependency>
+                </dependencies>
+                <configuration>
+                    <targetClasses>
+                        <param>cl.duoc.nutrivida.citas.service.Reglas*</param>
+                        <param>cl.duoc.nutrivida.citas.model.Contador</param>
+                        <param>cl.duoc.nutrivida.citas.model.EstadoCita</param>
+                        <param>cl.duoc.nutrivida.citas.model.Cita</param>
+                        <param>cl.duoc.nutrivida.citas.dto.Tarjeta</param>
+                        <param>cl.duoc.nutrivida.citas.dto.ServicioClinica</param>
+                    </targetClasses>
+                    <!-- Getters y setters de las entidades y accesores de ServicioClinica (record): sin lógica, no se mutan. -->
+                    <excludedMethods>
+                        <param>get*</param><param>set*</param>
+                        <param>codigo</param><param>tipo</param><param>nombre</param><param>duracionMin</param>
+                        <param>modalidad</param><param>precio</param><param>activo</param>
+                    </excludedMethods>
+                    <targetTests>
+                        <param>cl.duoc.nutrivida.citas.service.Reglas*Test</param>
+                        <param>cl.duoc.nutrivida.citas.model.*Test</param>
+                        <param>cl.duoc.nutrivida.citas.dto.*Test</param>
+                    </targetTests>
+                    <mutators><mutator>STRONGER</mutator></mutators>
+                    <outputFormats><param>HTML</param><param>XML</param></outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                    <threads>4</threads>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
