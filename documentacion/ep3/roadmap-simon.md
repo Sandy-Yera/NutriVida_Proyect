@@ -17,6 +17,7 @@
 | 8 | **Todo ejecutable desde Docker** | `docker compose up -d --build`: MySQL + 3 microservicios + frontend con Nginx (proxy `/api`). Funciona en Windows y Linux sin Java/Maven/Node instalados. |
 | 9 | **Verificación con script** | `scripts\verificar.ps1` es la definición de terminado de cada ítem: JUnit de ms-citas (Docker, Java 21), Vitest, los 5 servicios, `validate` del esquema y peticiones de humo. Un commit por ítem, solo si da PASA. |
 | 10 | **Modelo de ms-citas (R3)** | `pago` guarda `paciente_id`; `cita.pago_id` es `NOT NULL UNIQUE`; candado `agenda_dia` por nutricionista y día; `contador` para los IDs. Razones en "Notas para la defensa". |
+| 11 | **Cliente de ms-clinica (R6)** | `ClinicaClient` con tres implementaciones; `NUTRIVIDA_CLINICA_MODO=auto` (por defecto) usa las semillas de EP2 mientras C-31 no exista; `http` para el video y la entrega. |
 
 ## Estado
 
@@ -29,7 +30,7 @@
 | R4 | Formato de error: `GlobalExceptionHandler` + 401/403 por el mismo JSON | 15/11 | **Hecho en la base** (faltan pruebas) |
 | R3 | Modelo y BD (S-30): `EstadoCita`, `Cita`, `HistorialCita`, `Pago`, `Recordatorio`; `database/02_citas.sql` con semillas; `UNIQUE(pago_id)` | 13–15/11 | **Hecho** (12/11): 7 entidades, 4 repositorios, 8 pruebas JUnit; `validate` pasa en MySQL |
 | R5 | Reglas en Java (puerto de `utils/citas.js`): transiciones, 24 h, bloques, choques, 60 días, teleconsulta | 16–17/11 | **Hecho** (12/11): `ReglasCita` y `ReglasPago`, 45 pruebas JUnit espejo de las de EP2 (53 en total en ms-citas) |
-| R6 | Cliente de ms-clinica (`NUTRIVIDA_CLINICA_URL`) para horario y duración, con simulado | 17/11 | Sin empezar · depende de C-31 |
+| R6 | Cliente de ms-clinica (`NUTRIVIDA_CLINICA_URL`) para horario y duración, con simulado | 17/11 | **Hecho** (12/11): HTTP + semillas de respaldo, 21 pruebas JUnit (74 en total). Falta probarlo contra los endpoints reales de Catalina (C-31): `verificar.ps1` revisa su formato apenas existan |
 | R7 | API + Swagger (S-31 a S-33): endpoints de `contrato-backend.md` §6, DTOs, `@Valid` | 17–18/11 | Sin empezar |
 | R8 | Seguridad: `@PreAuthorize` por rol y reglas de dueño con `UsuarioActual` | 19/11 | **En riesgo** · depende de G-32 (plan B: perfil `dev`) |
 | R9 | Frontend modo dual (S-35): adaptadores API de `citasService`/`pagosService`; `Pago.jsx` en una sola llamada; 401 → `/login` | 20–21/11 | Sin empezar |
@@ -58,6 +59,7 @@
 1. **Rutas públicas vs. Forma D:** la Forma D pide que ningún endpoint responda sin autenticación salvo login y registro. Hoy son públicos los `GET` de catálogo, disponibilidad y artículos (los usa el sitio público de EP2). ¿Se mantienen o se exige token?
 2. **JWT de 8 h:** un usuario desactivado sigue con acceso hasta que vence su token (ms-citas y ms-clinica no consultan a ms-usuarios). Preparar la respuesta para la defensa o acortar la vigencia.
 3. **Agenda rápida del Inicio (Catalina):** `proximasHorasLibres` de `citasService` no tiene endpoint en el contrato §6. En modo API, o se agrega `GET /api/disponibilidad/proximas?cantidad`, o el frontend la arma con varias llamadas a `GET /api/disponibilidad`. Hay que decidirlo antes de R9.
+4. **Formato de los catálogos de Catalina (C-31):** ms-citas lee `GET /api/nutricionistas` y `GET /api/servicios` como **listas JSON** con los campos de las semillas de EP2: `id, dias (0 = domingo … 6 = sábado), horaInicio, horaFin` y `codigo, duracionMin, modalidad, precio, activo`. Si responde paginado, con otros nombres o con días 1-7, ms-citas responde 503. Confirmarlo con Catalina. También agregar el **503** a la tabla del contrato §2.3: ms-citas lo usa cuando ms-clinica no responde, y Nginx ya lo usa cuando un servicio está caído.
 
 ## Notas para la defensa
 
@@ -80,6 +82,21 @@
 - **El backend vuelve a validar la tarjeta** (Luhn, vencimiento, CVV) aunque el formulario ya lo hizo, porque desde Swagger o Postman cualquiera puede llamar a `POST /api/citas` sin pasar por la página. De la tarjeta solo se guardan los 4 últimos dígitos, y `Tarjeta.toString()` oculta el número por si alguien la imprime en un log.
 - **Qué permite cada rol** (RN-24 a RN-26) está en una tabla, `rolPuedeCambiarA`. Un rol desconocido o ausente no puede nada: la prueba encontró que sin un chequeo explícito un token sin rol habría dado 500 en vez de 403, y se corrigió.
 - **No se portó** lo que es solo de pantalla (`armarAgenda`, `separarProximasEHistorial`, `primerPasoIncompleto`, acciones de botones) ni `buscarProximasHorasLibres`, que no tiene endpoint en el contrato (ver pendientes).
+
+### R6 · Cliente de ms-clinica
+
+- **Por qué ms-citas pregunta y no copia.** El horario del nutricionista y el precio, la duración y la modalidad del servicio son de ms-clinica (Catalina). Si ms-citas guardara una copia, un cambio de precio en ms-clinica dejaría a ms-citas cobrando el precio viejo. Por eso no hay tablas de nutricionistas ni de servicios en `nutrivida_citas`: se piden por REST cada vez.
+- **Una interfaz, tres implementaciones** (`client/`). Los services de R7 usan `ClinicaClient` y no saben cuál les tocó. `ClinicaConfig` la elige con `NUTRIVIDA_CLINICA_MODO`:
+  - **`ClinicaHttp`** usa `RestClient` contra `NUTRIVIDA_CLINICA_URL`.
+  - **`ClinicaSimulada`** tiene las semillas de EP2.
+  - **`ClinicaConRespaldo`** (modo `auto`) prueba primero con ms-clinica y usa las semillas solo si no responde.
+- **Por qué `auto` por defecto.** Los endpoints de Catalina (C-31) todavía no existen, y sin respaldo ms-citas no podría agendar nada. Con `auto`, ms-citas empieza a usar los datos reales apenas Catalina los publique, sin tocar código. Para el video se usa `http`, así se ve que los datos vienen de verdad de ms-clinica.
+- **Cuándo se usan las semillas y cuándo no.** Se usan cuando ms-clinica no está: sin conexión, más de 3 s sin responder, un 5xx o un 404 en la lista, que significa que el endpoint aún no existe. **No** se usan cuando ms-clinica responde algo que no calza: un 401, un JSON paginado o un horario sin días. Eso es un error del contrato, y esconderlo con las semillas haría agendar con datos falsos sin que nadie lo note, así que sale como **503** con el JSON común.
+- **Por qué listas y no `/{id}`.** El catálogo es chico (4 nutricionistas y 18 servicios) y se trae en una llamada. La regla de teleconsulta (RN-16) necesita todos los servicios, y las estadísticas todos los nutricionistas. Además, un 404 de `/api/nutricionistas/NUT009` podría ser "ese id no existe" o "el endpoint no existe"; en una lista solo puede ser lo segundo.
+- **Se revisa lo que llega.** `ClinicaHttp` revisa cada horario (días 0-6, inicio antes del fin) y cada servicio (precio positivo, modalidad). Si un horario viniera sin días, el error saldría con nombre y apellido ("NUT001 viene sin dias…") y no como un 500 dentro de `ReglasCita`.
+- **Tiempo máximo de 3 s.** Si ms-clinica se cuelga, la reserva no se cuelga con él. Hay una prueba con un servidor que tarda 1,5 s y un límite de 300 ms.
+- **Token.** Hoy el catálogo es público (contrato §3), pero ms-citas reenvía el token del usuario por si el equipo decide exigirlo (pendiente 1).
+- **Pruebas.** `ClinicaHttpTest` levanta un ms-clinica falso, un servidor HTTP real del JDK, y prueba lo que viaja por la red: JSON con campos de más, 404, 500, servicio apagado, tiempo agotado, 401, JSON que no calza y reenvío del token. `verificar.ps1` muestra con qué modo arrancó ms-citas y, apenas existan los endpoints de Catalina, revisa que traigan los campos que ms-citas usa.
 
 ## Cambios respecto del plan semestral
 

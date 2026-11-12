@@ -66,6 +66,8 @@ services:
       <<: *entorno
       # ms-citas pide a ms-clinica el horario del nutricionista y la duración del servicio.
       NUTRIVIDA_CLINICA_URL: http://ms-clinica:8083
+      # auto: si ms-clinica no responde, usa las semillas de EP2. Para el video: http (ver .env.example).
+      NUTRIVIDA_CLINICA_MODO: ${NUTRIVIDA_CLINICA_MODO:-auto}
     ports:
       - "8082:8082"
 

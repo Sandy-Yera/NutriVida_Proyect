@@ -8,7 +8,9 @@
   3. docker   : docker compose up -d --build, recarga SOLO el esquema nutrivida_citas con
                 database/02_citas.sql (no borra el volumen ni toca los otros dos esquemas),
                 espera a ms-citas (Hibernate valida que las entidades calcen con las tablas)
-                y hace peticiones de humo contra el contrato (contrato-backend.md §2).
+                y hace peticiones de humo contra el contrato (contrato-backend.md §2). También
+                muestra con qué cliente de ms-clinica arrancó ms-citas y revisa que los
+                catálogos de ms-clinica, si ya existen, traigan los campos que ms-citas usa.
 
   Termina con una tabla PASA/FALLA y una línea "VEREDICTO". Código de salida 0 solo si todo pasa.
   Los logs completos quedan en %TEMP%\nutrivida-verificar-*.log.
@@ -193,6 +195,30 @@ try {
         Anotar 'Proxy /api/citas/mias sin token' (($r.Status -eq 401) -and (EsErrorComun $r.Cuerpo 401)) "HTTP $($r.Status)"
         $r = Pedir 'http://localhost:8080/api/noexiste'
         Anotar 'Proxy ruta inexistente' (($r.Status -eq 404) -and (EsErrorComun $r.Cuerpo 404)) "HTTP $($r.Status)"
+
+        # R6: con qué cliente de ms-clinica arrancó ms-citas (ClinicaConfig deja la línea en el log).
+        $modo = ([regex]::Match($logMs, 'ms-clinica: modo (.+)$', 'Multiline')).Groups[1].Value.Trim()
+        Anotar 'ms-citas -> ms-clinica (modo)' ([bool]$modo) $(if ($modo) { $modo } else { 'falta la línea "ms-clinica: modo" en el log' })
+
+        # Lo que ms-citas lee de ms-clinica. 404 = C-31 aún no está y el modo auto usa las semillas.
+        # 200 = se revisan los campos que ClinicaHttp exige; cualquier otra cosa haría responder 503.
+        $catalogos = @(
+            @{ Ruta = '/api/nutricionistas'; Campos = '"id"', '"dias"', '"horaInicio"', '"horaFin"' },
+            @{ Ruta = '/api/servicios'; Campos = '"codigo"', '"modalidad"', '"precio"', '"duracionMin"' })
+        foreach ($c in $catalogos) {
+            $r = Pedir "http://localhost:8083$($c.Ruta)"
+            if ($r.Status -eq 404) {
+                Anotar "Contrato ms-clinica $($c.Ruta)" $true 'aún no existe (C-31): ms-citas usa las semillas de EP2'
+            } elseif ($r.Status -eq 200) {
+                $faltan = @($c.Campos | Where-Object { $r.Cuerpo -notmatch [regex]::Escape($_) })
+                $esLista = $r.Cuerpo.TrimStart().StartsWith('[')
+                $ok = $esLista -and $faltan.Count -eq 0
+                $detalle = if ($ok) { 'lista con los campos que usa ms-citas' } elseif (-not $esLista) { 'no es una lista JSON' } else { 'faltan: ' + ($faltan -join ', ') }
+                Anotar "Contrato ms-clinica $($c.Ruta)" $ok $detalle
+            } else {
+                Anotar "Contrato ms-clinica $($c.Ruta)" $false "HTTP $($r.Status): ms-citas respondería 503"
+            }
+        }
 
         if ($hayScript) {
             $citas = ConsultaCitas 'SELECT COUNT(*) FROM nutrivida_citas.cita'
