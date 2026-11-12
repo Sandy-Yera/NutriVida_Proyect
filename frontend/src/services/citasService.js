@@ -8,6 +8,9 @@ import {
   errorProhibido,
 } from "../utils/errores.js";
 import { exigirActor } from "./actor.js";
+import { apiFetch, apiFetchONull, query, usarApi } from "./http.js";
+import { asegurarToken } from "./tokenPuente.js";
+import { obtenerSesion } from "../auth/auth.js";
 import { obtener as obtenerUsuarioData } from "../data/usuariosData.js";
 import {
   listarNutricionistas,
@@ -17,6 +20,14 @@ import {
 } from "./serviciosService.js";
 
 const esPresencial = (servicio) => servicio.modalidad.startsWith("Presencial");
+
+// Modo API (EP3, R9): las mismas firmas, pero contra ms-citas. Las reglas las aplica el
+// backend (con el usuario del token, no el usuarioId que entrega la página) y devuelve las
+// citas con la misma forma de EP2, así los componentes no cambian.
+async function conToken(ruta, opciones) {
+  await asegurarToken();
+  return apiFetch(ruta, opciones);
+}
 
 // RN-10 a RN-13: la fecha está dentro de los 60 días y la hora es una de las que el asistente
 // ofrecería (dentro de la jornada, sin choques, sin horas pasadas y con la cita completa).
@@ -41,12 +52,32 @@ async function exigirHoraDisponible({ nutricionistaId, fecha, hora, duracionMin 
   }
 }
 
+// En modo API cada rol tiene su ruta (contrato §6): el paciente /mias, el nutricionista
+// /agenda y la secretaria y el admin la búsqueda con filtros. Los filtros se vuelven a aplicar
+// aquí, así una página que pide { estado } a /mias recibe lo mismo que en modo local.
+async function listarCitasApi(filtros) {
+  const rol = obtenerSesion()?.rol;
+  const { desde, hasta } = filtros;
+  const ruta =
+    rol === "PACIENTE"
+      ? "/api/citas/mias"
+      : rol === "NUTRICIONISTA"
+        ? `/api/citas/agenda${query({ desde, hasta })}`
+        : `/api/citas${query(filtros)}`;
+  return citasUtils.filtrarCitas(await conToken(ruta), filtros);
+}
+
 export async function listarCitas({ pacienteId, nutricionistaId, estado, desde, hasta } = {}) {
+  if (usarApi()) return listarCitasApi({ pacienteId, nutricionistaId, estado, desde, hasta });
   const citas = await citasData.listar();
   return citasUtils.filtrarCitas(citas, { pacienteId, nutricionistaId, estado, desde, hasta });
 }
 
 export async function obtenerCita(id) {
+  if (usarApi()) {
+    await asegurarToken();
+    return apiFetchONull(`/api/citas/${encodeURIComponent(id)}`);
+  }
   return citasData.obtener(id);
 }
 
@@ -66,6 +97,10 @@ export async function puedeAgendarTeleconsulta(pacienteId) {
 // y que no esté asociado a otra cita. Después de crearla, el pago queda enlazado a ella.
 // También repite las reglas del asistente (RN-10 a RN-13 y RN-16): la página ayuda, el service decide.
 export async function crearCita(datos) {
+  if (usarApi()) {
+    // En ms-citas el pago y la cita nacen en la misma transacción (decisión 6).
+    throw errorConflicto("En modo API la cita se crea junto con el pago: usa pagarYCrearCita.");
+  }
   const [pago, servicio] = await Promise.all([
     pagosData.obtener(datos.pagoId),
     obtenerServicio(datos.servicioCodigo),
@@ -95,6 +130,31 @@ export async function crearCita(datos) {
   const cita = citasData.crear({ ...datos, duracionMin: servicio.duracionMin });
   pagosData.actualizar(pago.id, { citaId: cita.id });
   return cita;
+}
+
+// S-04 en modo API (decisión 6): POST /api/citas cobra y crea la cita en una sola transacción
+// de ms-citas. El paciente sale del token. Devuelve { aprobado: true, cita }, o
+// { aprobado: false, motivo } si el banco rechazó (402: el pago RECHAZADO queda guardado y la
+// cita no se crea). Lanza un ErrorApi si la tarjeta o la reserva no son válidas (400, 409).
+// En modo local, Pago.jsx sigue con los dos pasos de EP2 (procesarPago y luego crearCita).
+export async function pagarYCrearCita({ reserva, tarjeta }) {
+  try {
+    const cita = await conToken("/api/citas", {
+      method: "POST",
+      body: {
+        servicioCodigo: reserva.servicioCodigo,
+        nutricionistaId: reserva.nutricionistaId,
+        fecha: reserva.fecha,
+        hora: reserva.hora,
+        motivo: reserva.motivo,
+        tarjeta,
+      },
+    });
+    return { aprobado: true, cita };
+  } catch (error) {
+    if (error.estado === 402) return { aprobado: false, motivo: error.message };
+    throw error;
+  }
 }
 
 // RN-24 a RN-26 y RN-06: qué puede hacer cada rol sobre una cita. La página ya esconde los
@@ -136,6 +196,12 @@ function exigirCitaPropia(actor, cita) {
 // RN-02 a RN-08: valida el actor y la regla de 24 h; la transición la valida citasData.
 // usuarioId lo entrega la página en EP2; en EP3 lo toma el microservicio desde el JWT.
 export async function cambiarEstado(id, nuevoEstado, usuarioId) {
+  if (usarApi()) {
+    return conToken(`/api/citas/${encodeURIComponent(id)}/estado`, {
+      method: "PATCH",
+      body: { estado: nuevoEstado },
+    });
+  }
   const actual = exigirCita(id);
   const actor = exigirActor(usuarioId);
   exigirCitaPropia(actor, actual);
@@ -164,6 +230,12 @@ export async function cambiarEstado(id, nuevoEstado, usuarioId) {
 // "Solo se puede reprogramar...". usuarioId alimenta el historial y los permisos.
 // RN-06: el paciente solo reprograma con más de 24 h. El nutricionista no reprograma (RN-26).
 export async function reprogramarCita(id, fecha, hora, usuarioId) {
+  if (usarApi()) {
+    return conToken(`/api/citas/${encodeURIComponent(id)}/reprogramar`, {
+      method: "PATCH",
+      body: { fecha, hora },
+    });
+  }
   const cita = exigirCita(id);
   const actor = exigirActor(usuarioId, ["PACIENTE", "SECRETARIA", "ADMIN"]);
   exigirCitaPropia(actor, cita);
@@ -187,6 +259,11 @@ export async function horariosDisponibles(
   duracionMin = 30,
   idExcluido = null,
 ) {
+  if (usarApi()) {
+    // Público (Forma D): no necesita token.
+    const parametros = { nutricionistaId, fecha, duracion: duracionMin, excluir: idExcluido };
+    return apiFetch(`/api/disponibilidad${query(parametros)}`);
+  }
   const [citas, nutricionista] = await Promise.all([
     citasData.listar(),
     obtenerNutricionista(nutricionistaId),
@@ -197,12 +274,15 @@ export async function horariosDisponibles(
 }
 
 // Agenda rápida del Inicio (Catalina): las próximas horas libres de cualquier nutricionista.
+// En modo API, una sola llamada pública (decisión del equipo 3).
 export async function proximasHorasLibres(cantidad) {
+  if (usarApi()) return apiFetch(`/api/disponibilidad/proximas${query({ cantidad })}`);
   const [citas, nutricionistas] = await Promise.all([citasData.listar(), listarNutricionistas()]);
   return citasUtils.buscarProximasHorasLibres(nutricionistas, citas, new Date(), cantidad);
 }
 
 export async function estadisticas(desde, hasta) {
+  if (usarApi()) return conToken(`/api/citas/estadisticas${query({ desde, hasta })}`);
   const [citas, nutricionistas] = await Promise.all([citasData.listar(), listarNutricionistas()]);
   return citasUtils.calcularEstadisticas(
     citas,

@@ -18,7 +18,7 @@
 | 9 | **Verificación con script** | `scripts\verificar.ps1` es la definición de terminado de cada ítem: JUnit de ms-citas (Docker, Java 21), pruebas mutantes (PIT), Vitest, los 5 servicios, `validate` del esquema y peticiones de humo. Un commit por ítem, solo si da PASA. |
 | 10 | **Modelo de ms-citas (R3)** | `pago` guarda `paciente_id`; `cita.pago_id` es `NOT NULL UNIQUE`; candado `agenda_dia` por nutricionista y día; `contador` para los IDs. Razones en "Notas para la defensa". |
 | 11 | **Cliente de ms-clinica (R6)** | `ClinicaClient` con tres implementaciones; `NUTRIVIDA_CLINICA_MODO=auto` (por defecto) usa las semillas de EP2 mientras C-31 no exista; `http` para el video y la entrega. |
-| 12 | **Pruebas mutantes (PIT)** | La lógica de cálculo de ms-citas (`ReglasCita`, `ReglasPago`, `Contador`, `Cita.registrarCambio`, `Tarjeta`, `ServicioClinica`) se prueba con PIT: 257 mutantes, 255 muertos y 2 equivalentes documentados. `verificar.ps1` falla si sobrevive uno nuevo. |
+| 12 | **Pruebas mutantes (PIT)** | La lógica de cálculo de ms-citas (`ReglasCita`, `ReglasPago`, `Contador`, `Cita.registrarCambio`, `Tarjeta`, `ServicioClinica`) se prueba con PIT: 252 mutantes, 250 muertos y 2 equivalentes documentados. `verificar.ps1` falla si sobrevive uno nuevo. |
 | 13 | **API de ms-citas (R7 y R8)** | Rol grueso con `@PreAuthorize` en el controlador; dueño, 24 h y transiciones en el service, con los mismos mensajes de EP2. Cliente de ms-usuarios con los tres modos de R6 (`NUTRIVIDA_USUARIOS_MODO`). |
 
 ## Estado
@@ -35,7 +35,7 @@
 | R6 | Cliente de ms-clinica (`NUTRIVIDA_CLINICA_URL`) para horario y duración, con simulado | 17/11 | **Hecho** (12/11): HTTP + semillas de respaldo, 21 pruebas JUnit (74 en total). Falta probarlo contra los endpoints reales de Catalina (C-31): `verificar.ps1` revisa su formato apenas existan |
 | R7 | API + Swagger (S-31 a S-33): endpoints de `contrato-backend.md` §6, DTOs, `@Valid` | 17–18/11 | **Hecho** (12/11): 13 endpoints en 3 controladores (incluye `/api/disponibilidad/proximas`, decisión 3), `CitaService`, `PagoService` y `DisponibilidadService`; Swagger con ejemplos y códigos de respuesta |
 | R8 | Seguridad: `@PreAuthorize` por rol y reglas de dueño con `UsuarioActual` | 19/11 | **Hecho** (12/11): rol en cada endpoint, dueño en los services y cuenta desactivada (decisión 2) con `VerificadorCuenta`. Mientras no esté el login (G-32), los tokens salen del perfil `dev` (plan B) |
-| R9 | Frontend modo dual (S-35): adaptadores API de `citasService`/`pagosService`; `Pago.jsx` en una sola llamada; 401 → `/login` | 20–21/11 | Sin empezar |
+| R9 | Frontend modo dual (S-35): adaptadores API de `citasService`/`pagosService`; `Pago.jsx` en una sola llamada; 401 → `/login` | 20–21/11 | **Hecho** (12/11): `citasService` y `pagosService` en modo API con las rutas del contrato §6; `pagarYCrearCita` cobra y crea en una llamada (201 / 402 / 409); `SesionExpirada` lleva a `/login` ante un 401; token del perfil `dev` mientras no hay login (`tokenPuente.js`). 20 pruebas Vitest nuevas (456 en total) y el flujo probado en el navegador contra Docker: Mis citas desde la API y pago con tarjeta 4242 → `C0007` / `P0008` en MySQL |
 | R10 | Integración con los 3 servicios + `peticiones.http` + 4 pruebas JUnit/Mockito (transiciones, 24 h, pago doble, 403) | 22/11 | **Hecho** (12/11): `CitaServiceTest` (4 con Mockito), `ApiCitasTest` (16 de integración), `backend/ms-citas/peticiones.http` y 9 peticiones de humo autenticadas en `verificar.ps1` contra MySQL. 150 pruebas JUnit en total. Pendiente: repetirlo con el login real (G-32) y los catálogos de Catalina (C-31) |
 | R11 | **Video** (tope duro): Swagger de citas, flujo React→API→BD, paciente vs secretaria (403), recarga con sesión | **23/11** | Sin empezar |
 | R12 | Documentación (S-37): sección del documento de integración, ERS V3, manual con capturas | 24/11 | Sin empezar |
@@ -152,6 +152,18 @@
 - **"Pago doble"** ya no puede ocurrir como en EP2, porque el pago y la cita nacen en la misma petición. La prueba revisa los dos casos que quedan: un rechazo guarda el pago sin cita, y una hora tomada se rechaza antes de cobrar.
 - **`peticiones.http`** recorre el contrato §6 en orden, para la extensión REST Client de VS Code: tokens, disponibilidad, crear, 409, 402, 400, 403, consultas por rol, estados, reprogramar, 24 h, eliminar y estadísticas. Sirve de guion para la parte de Swagger del video.
 
+### R9 · Frontend en modo dual
+
+- **Las páginas no cambian, cambian los services.** `citasService.js` y `pagosService.js` tienen las mismas funciones que en EP2. Con `VITE_API_MODE=api` cada una llama a su ruta del contrato §6; con `local` siguen usando `localStorage`. Por eso las 436 pruebas de Vitest anteriores siguen pasando sin tocarlas.
+- **Cada rol lista por su ruta.** `listarCitas` va a `/api/citas/mias` (paciente), `/api/citas/agenda` (nutricionista) o `/api/citas` (secretaria y admin), y después aplica los mismos filtros de pantalla que en modo local.
+- **`Pago.jsx` en una sola llamada** (decisión 6). En modo local paga y después crea la cita, en dos pasos. En modo API llama a `pagarYCrearCita`, que hace un solo `POST /api/citas`:
+  - 201 → pantalla de éxito, y la reserva se borra.
+  - 402 → pantalla de pago rechazado con el motivo del backend; la reserva se conserva para reintentar.
+  - Un error de la tarjeta → bajo su campo. Uno de la hora (409) → arriba del formulario, aclarando que no hubo cobro.
+- **401 → `/login`.** `apiFetch` avisa con un evento y `SesionExpirada` (en `App.jsx`) lleva al login recordando la página de origen y el mensaje, por ejemplo _"Tu cuenta está desactivada."_.
+- **Plan B del token** (`tokenPuente.js`). Mientras el login de Gabriel (G-32) no exista, la sesión de EP2 se cambia por un token del perfil `dev` de ms-citas, con el mismo `JWT_SECRET`. Si el token guardado es de otro usuario, pide uno nuevo. Sin el perfil (como en la entrega), `/api/dev/token` da 404 y no se inventa nada. Cuando exista el login, este archivo se borra.
+- **Un error que solo apareció en el navegador.** Las peticiones de humo de `verificar.ps1` pasaban, pero desde el navegador todo `POST` por Nginx daba 403. El navegador manda `Origin: http://localhost:8080`, y Nginx reenviaba `Host: localhost` sin el puerto, así que Spring creía que era otro sitio y lo rechazaba por CORS. Se corrigió con `proxy_set_header Host $http_host`, y `verificar.ps1` ahora repite un `POST` con `Origin` por el proxy para que no vuelva.
+
 ### Pruebas mutantes (PIT)
 
 - **Qué son.** La cobertura dice qué líneas se ejecutaron, no si alguna prueba revisa el resultado. PIT cambia el código compilado de a un detalle por vez (`>` por `>=`, `+` por `-`, `true` por `false`, quita un `if`) y corre las pruebas con cada cambio, llamado *mutante*. Si alguna prueba falla, el mutante está *muerto*. Si todas pasan, sobrevive: hay un error posible que ninguna prueba detectaría.
@@ -172,6 +184,7 @@
   - `suma += d` → `suma -= d` da lo mismo, porque −x es múltiplo de 10 exactamente cuando x lo es.
 
   `verificar.ps1` los acepta por nombre y falla con cualquier otro. Se probó quitando una prueba: el paso da FALLA y nombra los mutantes vivos.
+- **Atrapó una función sin pruebas.** `buscarProximasHorasLibres` se agregó con R7 (decisión 3) y solo la probaban las pruebas de la API. La verificación completa dio FALLA: 10 mutantes de esa función sin cobertura. Se agregaron sus 6 pruebas espejo de `citas.test.js` (156 JUnit en total). También se reescribió con un stream: la condición `encontradas.size() < cantidad` del bucle solo ahorraba trabajo y habría dejado un mutante equivalente más. Ahora son 252 mutantes, 250 muertos.
 - **Por qué solo la lógica de cálculo.** Ahí un `>=` mal puesto cuesta caro: una cita cancelable con 23 h o un cobro mal validado. Los controladores y repositorios se prueban mejor con pruebas de integración (R10); mutar getters o el arranque de Spring solo agregaría ruido.
 - **Cómo correrlo:** `.\scripts\verificar.ps1 -Solo mutantes` (cerca de 1 min). El reporte queda en `backend/ms-citas/target/pit-reports/index.html`, con cada línea en verde o rojo.
 

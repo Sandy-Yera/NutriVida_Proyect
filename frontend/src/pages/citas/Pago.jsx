@@ -7,13 +7,19 @@ import { borrarReserva, guardarReserva, leerReserva } from "../../data/reservaDa
 import {
   crearCita,
   horariosDisponibles,
+  pagarYCrearCita,
   puedeAgendarTeleconsulta,
 } from "../../services/citasService.js";
+import { usarApi } from "../../services/http.js";
 import { procesarPago, reembolsarPagoSinCita } from "../../services/pagosService.js";
 import { obtenerNutricionista, obtenerServicio } from "../../services/serviciosService.js";
 import { primerPasoIncompleto, validarFechaCita, validarMotivo } from "../../utils/citas.js";
 
 const esPresencial = (servicio) => servicio.modalidad.startsWith("Presencial");
+
+// Los campos que FormPago muestra bajo cada input. Otro error (por ejemplo, 409 de "hora")
+// se muestra arriba del formulario, así nunca queda un error sin mostrar.
+const CAMPOS_TARJETA = ["titular", "numero", "vencimiento", "cvv"];
 
 // Antes de cobrar se revisa que la reserva siga siendo válida (RN-10 a RN-14 y RN-16).
 // Así no se cobra una reserva que crearCita rechazaría. Devuelve "" si está todo bien.
@@ -68,10 +74,30 @@ export default function Pago() {
     navigate("/citas/solicitar");
   }
 
+  // Modo API (R9): una sola llamada. ms-citas valida, cobra y crea en una transacción, así que
+  // no puede quedar un pago aprobado sin cita y no hace falta el reembolso del modo local.
+  async function pagarEnApi(datosTarjeta) {
+    try {
+      const resultado = await pagarYCrearCita({ reserva, tarjeta: datosTarjeta });
+      if (!resultado.aprobado) {
+        navigate("/citas/pago/error", { state: { motivo: resultado.motivo } });
+        return;
+      }
+      borrarReserva();
+      navigate(`/citas/pago/exito/${resultado.cita.id}`, { replace: true });
+    } catch (error) {
+      const deTarjeta = Object.keys(error.errores ?? {}).some((c) => CAMPOS_TARJETA.includes(c));
+      if (deTarjeta) setErrores(error.errores);
+      else setErrorGeneral(`${error.message} No se hizo ningún cobro.`);
+      setProcesando(false);
+    }
+  }
+
   async function pagar(datosTarjeta) {
     setProcesando(true);
     setErrores({});
     setErrorGeneral("");
+    if (usarApi()) return pagarEnApi(datosTarjeta);
     let resultado;
     try {
       resultado = await procesarPago({ ...datosTarjeta, monto: carga.servicio.precio });

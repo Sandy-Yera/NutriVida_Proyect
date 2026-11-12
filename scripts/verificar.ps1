@@ -59,8 +59,9 @@ function Pedir([string]$url) {
 
 # Como Pedir, pero con método, cuerpo JSON y token. El cuerpo va por archivo (--data-binary @):
 # PowerShell 5.1 rompe las comillas de un JSON pasado como argumento a curl.exe.
-function PedirApi([string]$metodo, [string]$url, [string]$cuerpo = '', [string]$token = '') {
+function PedirApi([string]$metodo, [string]$url, [string]$cuerpo = '', [string]$token = '', [string]$origen = '') {
     $argumentos = @('-s', '--max-time', '15', '-X', $metodo, '-w', "`n%{http_code}")
+    if ($origen) { $argumentos += @('-H', "Origin: $origen") }
     if ($token) { $argumentos += @('-H', "Authorization: Bearer $token") }
     if ($cuerpo) {
         $archivo = Join-Path $env:TEMP 'nutrivida-verificar-cuerpo.json'
@@ -342,6 +343,11 @@ try {
                     Anotar 'DELETE de la cita cancelada' ($r.Status -eq 204) "HTTP $($r.Status)"
                 }
             }
+
+            # Como el navegador: un POST por el proxy lleva Origin. Si Nginx no reenvía el puerto
+            # en Host, Spring lo toma por otro sitio y responde 403 de CORS (encontrado en R9).
+            $r = PedirApi 'POST' 'http://localhost:8080/api/dev/token' '{"id":"U100","rol":"PACIENTE"}' '' 'http://localhost:8080'
+            Anotar 'POST por el proxy con Origin' ($r.Status -eq 200) "HTTP $($r.Status) (403 = Host sin puerto en nginx.conf)"
         }
     }
 }
