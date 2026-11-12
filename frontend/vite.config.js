@@ -19,6 +19,7 @@ export default defineConfig({
       "/api/citas": MS_CITAS,
       "/api/pagos": MS_CITAS,
       "/api/disponibilidad": MS_CITAS,
+      "/api/dev": MS_CITAS, // plan B: token de prueba del perfil dev de ms-citas
       "/api/servicios": MS_CLINICA,
       "/api/nutricionistas": MS_CLINICA,
       "/api/pacientes": MS_CLINICA,

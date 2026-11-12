@@ -134,7 +134,7 @@ public class ClinicaHttp implements ClinicaClient {
      * Hoy el catálogo es público (contrato §3), pero si el equipo decide exigir token (Forma D,
      * pendiente 1 del roadmap), ms-citas reenvía el mismo token del usuario y nada se rompe.
      */
-    static ClientHttpResponse reenviarToken(HttpRequest peticion, byte[] cuerpo, ClientHttpRequestExecution ejecucion)
+    public static ClientHttpResponse reenviarToken(HttpRequest peticion, byte[] cuerpo, ClientHttpRequestExecution ejecucion)
             throws IOException {
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes atributos) {
             String token = atributos.getRequest().getHeader(HttpHeaders.AUTHORIZATION);

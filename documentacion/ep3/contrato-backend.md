@@ -69,6 +69,7 @@ Las dos tablas de rutas son iguales. Ventajas: no hay CORS, el frontend no conoc
 | **404** Not Found             | El recurso o la ruta no existen                               | `GET /api/citas/C9999`                                                                            | No                                  |
 | **409** Conflict              | La petición choca con el estado actual                        | Horario ya tomado; pasar de ATENDIDA a CANCELADA; quedan menos de 24 h; correo duplicado          | Opcional (p. ej. `hora` o `correo`) |
 | **500** Internal Server Error | Error no previsto                                             | — _"Ocurrió un error inesperado. Intenta nuevamente."_ (el detalle queda solo en el log)          | No                                  |
+| **503** Service Unavailable   | El dueño de un dato no responde                               | Nginx con un microservicio caído; ms-citas sin respuesta de ms-clinica o ms-usuarios en modo `http` | No                                  |
 
 400, 409 o 403 se distinguen así: **400** si el dato está mal escrito, **409** si el dato está bien pero choca con lo que ya existe y **403** si el dato está bien pero no te corresponde.
 
@@ -127,6 +128,7 @@ Las dos tablas de rutas son iguales. Ventajas: no hay CORS, el frontend no conoc
 | Método y ruta                                                  | Rol                                       | Respuesta            | Notas                                                                                                                |
 | -------------------------------------------------------------- | ----------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/disponibilidad?nutricionistaId&fecha&duracion`       | Público                                   | 200 `["09:00", …]`   | Pide el horario a `ms-clinica`.                                                                                      |
+| `GET /api/disponibilidad/proximas?cantidad`                   | Público                                   | 200 `[{nutricionistaId, fecha, hora}]` | Agenda rápida del Inicio: las próximas horas libres de toda la clínica (hasta 14 días). Decisión del equipo 13/11. |
 | `POST /api/citas`                                              | PACIENTE                                  | 201 cita · 402 · 409 | Cuerpo: datos de la cita más `tarjeta`. Una transacción (sección 5).                                                 |
 | `GET /api/citas/mias`                                          | PACIENTE                                  | 200                  |                                                                                                                      |
 | `GET /api/citas/agenda?desde&hasta`                            | NUTRICIONISTA                             | 200                  | Solo las de su `nutricionistaId`.                                                                                    |

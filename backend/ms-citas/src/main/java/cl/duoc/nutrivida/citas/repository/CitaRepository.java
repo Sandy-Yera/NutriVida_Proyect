@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +24,15 @@ public interface CitaRepository extends JpaRepository<Cita, String> {
     /** GET /api/citas/agenda: solo las del nutricionista del token. */
     List<Cita> findByNutricionistaIdAndFechaBetweenOrderByFechaAscHoraAsc(String nutricionistaId,
             LocalDate desde, LocalDate hasta);
+
+    /**
+     * Lee la cita con bloqueo exclusivo (SELECT … FOR UPDATE) hasta el COMMIT: dos cambios de
+     * estado simultáneos sobre la misma cita (la secretaria confirma mientras el paciente cancela)
+     * se hacen uno después del otro, y el segundo ve el estado que dejó el primero.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Cita c where c.id = :id")
+    Optional<Cita> bloquear(@Param("id") String id);
 
     /** GET /api/citas/estadisticas. */
     List<Cita> findByFechaBetween(LocalDate desde, LocalDate hasta);

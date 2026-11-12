@@ -1,6 +1,7 @@
 package cl.duoc.nutrivida.citas.service;
 
 import cl.duoc.nutrivida.citas.dto.Estadisticas;
+import cl.duoc.nutrivida.citas.dto.HoraLibre;
 import cl.duoc.nutrivida.citas.dto.HorarioNutricionista;
 import cl.duoc.nutrivida.citas.model.Cita;
 import cl.duoc.nutrivida.citas.model.EstadoCita;
@@ -15,6 +16,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -158,6 +160,27 @@ public final class ReglasCita {
                         .allMatch(n -> enJornada.contains(n) && !ocupados.contains(n)))
                 .filter(b -> ahora == null || LocalDateTime.of(fecha, b).isAfter(ahora))
                 .toList();
+    }
+
+    /**
+     * Agenda rápida del Inicio (decisión 3): las próximas horas libres de toda la clínica desde
+     * ahora, para una consulta de 30 min. Recorre día por día (hasta diasMaximos) y ordena por
+     * fecha, hora y nutricionista, igual que buscarProximasHorasLibres de EP2.
+     */
+    public static List<HoraLibre> buscarProximasHorasLibres(Collection<HorarioNutricionista> nutricionistas,
+            Collection<Cita> citas, LocalDateTime ahora, int cantidad, int diasMaximos) {
+        List<HoraLibre> encontradas = new ArrayList<>();
+        LocalDate fecha = ahora.toLocalDate();
+        for (int dia = 0; dia < diasMaximos && encontradas.size() < cantidad; dia++) {
+            LocalDate delDia = fecha;
+            nutricionistas.stream()
+                    .flatMap(n -> horariosDisponibles(n, delDia, citas, DURACION_BLOQUE, ahora).stream()
+                            .map(hora -> new HoraLibre(n.id(), delDia, hora)))
+                    .sorted(Comparator.comparing(HoraLibre::hora).thenComparing(HoraLibre::nutricionistaId))
+                    .forEach(encontradas::add);
+            fecha = fecha.plusDays(1);
+        }
+        return List.copyOf(encontradas.subList(0, Math.min(encontradas.size(), Math.max(0, cantidad))));
     }
 
     // ------------------------------------------------------------------ tiempos

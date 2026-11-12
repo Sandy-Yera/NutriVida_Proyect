@@ -68,6 +68,12 @@ services:
       NUTRIVIDA_CLINICA_URL: http://ms-clinica:8083
       # auto: si ms-clinica no responde, usa las semillas de EP2. Para el video: http (ver .env.example).
       NUTRIVIDA_CLINICA_MODO: ${NUTRIVIDA_CLINICA_MODO:-auto}
+      # R8: en cada petición con token pregunta a ms-usuarios si la cuenta sigue activa (30 s de memoria).
+      NUTRIVIDA_USUARIOS_URL: http://ms-usuarios:8081
+      NUTRIVIDA_USUARIOS_MODO: ${NUTRIVIDA_USUARIOS_MODO:-auto}
+      # Plan B mientras ms-usuarios no tenga login (G-32): el perfil dev agrega POST /api/dev/token.
+      # Para el video y la entrega: MS_CITAS_PERFILES=mysql en el .env (ver .env.example).
+      SPRING_PROFILES_ACTIVE: ${MS_CITAS_PERFILES:-mysql,dev}
     ports:
       - "8082:8082"
 

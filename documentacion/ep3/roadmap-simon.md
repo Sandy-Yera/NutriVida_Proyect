@@ -1,7 +1,7 @@
 # Roadmap EP3 · Simon (ms-citas e integración de citas)
 
 **Entrega: miércoles 25/11/2026** (se planifica como sección 001). Defensa: semana 17.
-Última actualización: 12/11/2026.
+Última actualización: 12/11/2026 (R7 a R10).
 
 ## Decisiones tomadas
 
@@ -19,6 +19,7 @@
 | 10 | **Modelo de ms-citas (R3)** | `pago` guarda `paciente_id`; `cita.pago_id` es `NOT NULL UNIQUE`; candado `agenda_dia` por nutricionista y día; `contador` para los IDs. Razones en "Notas para la defensa". |
 | 11 | **Cliente de ms-clinica (R6)** | `ClinicaClient` con tres implementaciones; `NUTRIVIDA_CLINICA_MODO=auto` (por defecto) usa las semillas de EP2 mientras C-31 no exista; `http` para el video y la entrega. |
 | 12 | **Pruebas mutantes (PIT)** | La lógica de cálculo de ms-citas (`ReglasCita`, `ReglasPago`, `Contador`, `Cita.registrarCambio`, `Tarjeta`, `ServicioClinica`) se prueba con PIT: 257 mutantes, 255 muertos y 2 equivalentes documentados. `verificar.ps1` falla si sobrevive uno nuevo. |
+| 13 | **API de ms-citas (R7 y R8)** | Rol grueso con `@PreAuthorize` en el controlador; dueño, 24 h y transiciones en el service, con los mismos mensajes de EP2. Cliente de ms-usuarios con los tres modos de R6 (`NUTRIVIDA_USUARIOS_MODO`). |
 
 ## Estado
 
@@ -32,8 +33,8 @@
 | R3 | Modelo y BD (S-30): `EstadoCita`, `Cita`, `HistorialCita`, `Pago`, `Recordatorio`; `database/02_citas.sql` con semillas; `UNIQUE(pago_id)` | 13–15/11 | **Hecho** (12/11): 7 entidades, 4 repositorios, 8 pruebas JUnit; `validate` pasa en MySQL |
 | R5 | Reglas en Java (puerto de `utils/citas.js`): transiciones, 24 h, bloques, choques, 60 días, teleconsulta | 16–17/11 | **Hecho** (12/11): `ReglasCita` y `ReglasPago`, 45 pruebas JUnit espejo de las de EP2 (53 en total en ms-citas) |
 | R6 | Cliente de ms-clinica (`NUTRIVIDA_CLINICA_URL`) para horario y duración, con simulado | 17/11 | **Hecho** (12/11): HTTP + semillas de respaldo, 21 pruebas JUnit (74 en total). Falta probarlo contra los endpoints reales de Catalina (C-31): `verificar.ps1` revisa su formato apenas existan |
-| R7 | API + Swagger (S-31 a S-33): endpoints de `contrato-backend.md` §6, DTOs, `@Valid` | 17–18/11 | Sin empezar |
-| R8 | Seguridad: `@PreAuthorize` por rol y reglas de dueño con `UsuarioActual` | 19/11 | **En riesgo** · depende de G-32 (plan B: perfil `dev`) |
+| R7 | API + Swagger (S-31 a S-33): endpoints de `contrato-backend.md` §6, DTOs, `@Valid` | 17–18/11 | **Hecho** (12/11): 13 endpoints en 3 controladores (incluye `/api/disponibilidad/proximas`, decisión 3), `CitaService`, `PagoService` y `DisponibilidadService`; Swagger con ejemplos y códigos de respuesta |
+| R8 | Seguridad: `@PreAuthorize` por rol y reglas de dueño con `UsuarioActual` | 19/11 | **Hecho** (12/11): rol en cada endpoint, dueño en los services y cuenta desactivada (decisión 2) con `VerificadorCuenta`. Mientras no esté el login (G-32), los tokens salen del perfil `dev` (plan B) |
 | R9 | Frontend modo dual (S-35): adaptadores API de `citasService`/`pagosService`; `Pago.jsx` en una sola llamada; 401 → `/login` | 20–21/11 | Sin empezar |
 | R10 | Integración con los 3 servicios + `peticiones.http` + 4 pruebas JUnit/Mockito (transiciones, 24 h, pago doble, 403) | 22/11 | Sin empezar |
 | R11 | **Video** (tope duro): Swagger de citas, flujo React→API→BD, paciente vs secretaria (403), recarga con sesión | **23/11** | Sin empezar |
@@ -55,12 +56,14 @@
 | Endpoints de Catalina (C-31) atrasados | Cliente de ms-clinica simulado con las semillas | 20/11 |
 | Video atrasado | Tope 23/11 con un día de margen | 23/11 |
 
-## Pendiente de decidir con el equipo
+## Decisiones del equipo (13/11)
 
-1. **Rutas públicas vs. Forma D:** la Forma D pide que ningún endpoint responda sin autenticación salvo login y registro. Hoy son públicos los `GET` de catálogo, disponibilidad y artículos (los usa el sitio público de EP2). ¿Se mantienen o se exige token?
-2. **JWT de 8 h:** un usuario desactivado sigue con acceso hasta que vence su token (ms-citas y ms-clinica no consultan a ms-usuarios). Preparar la respuesta para la defensa o acortar la vigencia.
-3. **Agenda rápida del Inicio (Catalina):** `proximasHorasLibres` de `citasService` no tiene endpoint en el contrato §6. En modo API, o se agrega `GET /api/disponibilidad/proximas?cantidad`, o el frontend la arma con varias llamadas a `GET /api/disponibilidad`. Hay que decidirlo antes de R9.
-4. **Formato de los catálogos de Catalina (C-31):** ms-citas lee `GET /api/nutricionistas` y `GET /api/servicios` como **listas JSON** con los campos de las semillas de EP2: `id, dias (0 = domingo … 6 = sábado), horaInicio, horaFin` y `codigo, duracionMin, modalidad, precio, activo`. Si responde paginado, con otros nombres o con días 1-7, ms-citas responde 503. Confirmarlo con Catalina. También agregar el **503** a la tabla del contrato §2.3: ms-citas lo usa cuando ms-clinica no responde, y Nginx ya lo usa cuando un servicio está caído.
+1. **Rutas públicas:** se mantienen como están. Son públicos los `GET` de catálogo, disponibilidad y artículos, que usa el sitio público de EP2.
+2. **Usuario desactivado:** pierde el acceso al instante, aunque su token siga vigente. En cada petición con token, ms-citas pregunta a ms-usuarios si la cuenta sigue activa (con caché de 30 s) y responde **401** _"Tu cuenta está desactivada. Contacta a la clínica."_. Ver R8.
+3. **Agenda rápida del Inicio:** propuesta de Simon, implementada: `GET /api/disponibilidad/proximas?cantidad`. Es una sola llamada en vez de una por nutricionista y día, y la regla (`buscarProximasHorasLibres`) queda junto a la de disponibilidad.
+4. **Catálogos de ms-clinica y usuarios de ms-usuarios:** ms-citas se construye con las semillas de EP2 (modo `auto`) sin tocar el código de Catalina ni el de Gabriel.
+   - Cuando publiquen sus endpoints, ms-citas los usa solo: `verificar.ps1` avisa si traen el formato esperado.
+   - El **503** se agregó a la tabla del contrato §2.3: ms-citas lo usa cuando el dueño de un dato no responde.
 
 ## Notas para la defensa
 
@@ -82,7 +85,7 @@
 - **Las 24 h cuentan horas reales.** `puedeCancelar` calcula con la zona `America/Santiago`. El 6/9/2026 Chile adelanta el reloj y ese día dura 23 h: el sábado a las 09:30 el reloj dice que faltan 24 h 30 min para una cita del domingo a las 10:00, pero en realidad faltan 23 h 30 min, y no se puede cancelar. Restar horas del reloj daría lo contrario (hay una prueba para eso). Los 60 días, en cambio, se cuentan en días de calendario.
 - **El backend vuelve a validar la tarjeta** (Luhn, vencimiento, CVV) aunque el formulario ya lo hizo, porque desde Swagger o Postman cualquiera puede llamar a `POST /api/citas` sin pasar por la página. De la tarjeta solo se guardan los 4 últimos dígitos, y `Tarjeta.toString()` oculta el número por si alguien la imprime en un log.
 - **Qué permite cada rol** (RN-24 a RN-26) está en una tabla, `rolPuedeCambiarA`. Un rol desconocido o ausente no puede nada: la prueba encontró que sin un chequeo explícito un token sin rol habría dado 500 en vez de 403, y se corrigió.
-- **No se portó** lo que es solo de pantalla (`armarAgenda`, `separarProximasEHistorial`, `primerPasoIncompleto`, acciones de botones) ni `buscarProximasHorasLibres`, que no tiene endpoint en el contrato (ver pendientes).
+- **No se portó** lo que es solo de pantalla (`armarAgenda`, `separarProximasEHistorial`, `primerPasoIncompleto`, acciones de botones). `buscarProximasHorasLibres` sí se portó después, con R7, cuando el equipo aprobó su endpoint (decisión 3).
 
 ### R6 · Cliente de ms-clinica
 
@@ -98,6 +101,36 @@
 - **Tiempo máximo de 3 s.** Si ms-clinica se cuelga, la reserva no se cuelga con él. Hay una prueba con un servidor que tarda 1,5 s y un límite de 300 ms.
 - **Token.** Hoy el catálogo es público (contrato §3), pero ms-citas reenvía el token del usuario por si el equipo decide exigirlo (pendiente 1).
 - **Pruebas.** `ClinicaHttpTest` levanta un ms-clinica falso, un servidor HTTP real del JDK, y prueba lo que viaja por la red: JSON con campos de más, 404, 500, servicio apagado, tiempo agotado, 401, JSON que no calza y reenvío del token. `verificar.ps1` muestra con qué modo arrancó ms-citas y, apenas existan los endpoints de Catalina, revisa que traigan los campos que ms-citas usa.
+
+### R7 · API de ms-citas
+
+- **13 endpoints en 3 controladores** (`CitaController`, `PagoController`, `DisponibilidadController`), uno por fila del contrato §6. Los controladores no deciden nada: reciben, validan la forma con `@Valid` y llaman al service.
+- **`POST /api/citas` en una transacción** (decisión 6). El orden importa:
+  1. Se valida todo lo que no toca la base: servicio activo, nutricionista, motivo, fecha y tarjeta.
+  2. Se revisa la teleconsulta.
+  3. Se toma el candado `agenda_dia` y se revisa que la hora siga libre.
+  4. Recién entonces se cobra.
+
+  Así, una hora tomada no cobra nada, y no queda un pago aprobado sin cita. Si el banco rechaza, el pago RECHAZADO se guarda (`noRollbackFor`) y la respuesta es **402**.
+- **Lo que se ofrece es lo que se acepta.** `GET /api/disponibilidad` y la validación de `POST /api/citas` usan la misma función, `ReglasCita.horariosDisponibles`. No puede pasar que el asistente ofrezca una hora y la reserva la rechace.
+- **El paciente sale del token**, no del cuerpo. Nadie puede agendar a nombre de otro, aunque arme la petición a mano en Swagger.
+- **Cambios de estado con la cita bloqueada** (`SELECT … FOR UPDATE`). Si la secretaria confirma mientras el paciente cancela, la segunda petición espera y ve el estado que dejó la primera. Al cancelar, el reembolso va en la misma transacción (RN-08).
+- **Las entidades nunca salen por la API.** `CitaRespuesta` y `PagoRespuesta` tienen exactamente los campos de EP2 (`hora` como `"HH:mm"`, historial con `de`, `a` y `por`), así el frontend no cambia entre modo local y modo API.
+- **`/api/disponibilidad/proximas`** (decisión 3) recorre hasta 14 días y entrega entre 1 y 20 horas. Una llamada reemplaza a las 4 × 14 que haría el frontend preguntando por cada nutricionista y día.
+
+### R8 · Roles, dueño y cuenta desactivada
+
+- **Dos capas.** El rol va en el controlador con `@PreAuthorize("hasRole('PACIENTE')")`, a la vista junto al endpoint. Lo que depende del dato va en el service con `UsuarioActual`:
+  - El paciente solo ve y cambia sus citas: "Esa cita no es tuya.".
+  - El nutricionista, solo las de su agenda: "Esa cita no está en tu agenda.".
+  - Qué estado puede poner cada rol (RN-24 a RN-26).
+  - La regla de 24 h, que es solo para el paciente.
+- **El comprobante** lo ve quien pagó o el admin. Por eso `pago` guarda `paciente_id` (ver R3).
+- **Cuenta desactivada (decisión 2).** Un JWT vale 8 h por sí solo: sin revisar, un usuario desactivado seguiría entrando hasta que el token venza. `JwtFiltro` pregunta a ms-usuarios (`GET /api/usuarios/{id}`, con el token del propio usuario) y responde **401** _"Tu cuenta está desactivada. Contacta a la clínica."_.
+- **Por qué 30 s de memoria.** Una página hace varias peticiones seguidas: sin memoria, cada una consultaría a ms-usuarios. Con 30 s por usuario, la cuenta pierde el acceso a más tardar 30 s después de desactivarla, contra 8 h sin la revisión.
+- **Mismos tres modos que ms-clinica** (`NUTRIVIDA_USUARIOS_MODO`). `GET /api/usuarios/{id}` todavía no existe (G-32), y ms-usuarios responde 404 _"La ruta solicitada no existe."_. En modo `auto`, ms-citas lo reconoce y usa las semillas de EP2, con las 9 cuentas activas. Un usuario que no está en las semillas (un paciente recién registrado) no se bloquea. Un 401 o un 404 del usuario sí significa que ms-usuarios no reconoce la cuenta.
+- **Si ms-usuarios no responde en modo `http`**, la respuesta es **503** con el JSON común, no un 500. El filtro le pasa el error a `GlobalExceptionHandler`, igual que los 401 y 403.
+- **Plan B mientras no hay login.** El perfil `dev` agrega `POST /api/dev/token` y está activo por defecto en `docker-compose.yml` (`MS_CITAS_PERFILES=mysql,dev`). **Para el video y la entrega se apaga** con `MS_CITAS_PERFILES=mysql` en `.env`; `verificar.ps1` muestra si quedó activo.
 
 ### Pruebas mutantes (PIT)
 
