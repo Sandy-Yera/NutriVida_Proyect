@@ -56,8 +56,8 @@
 ## Pendiente de decidir con el equipo
 
 1. **Rutas públicas vs. Forma D:** la Forma D pide que ningún endpoint responda sin autenticación salvo login y registro. Hoy son públicos los `GET` de catálogo, disponibilidad y artículos (los usa el sitio público de EP2). ¿Se mantienen o se exige token?
-3. **Agenda rápida del Inicio (Catalina):** `proximasHorasLibres` de `citasService` no tiene endpoint en el contrato §6. En modo API, o se agrega `GET /api/disponibilidad/proximas?cantidad`, o el frontend la arma con varias llamadas a `GET /api/disponibilidad`. Hay que decidirlo antes de R9.
 2. **JWT de 8 h:** un usuario desactivado sigue con acceso hasta que vence su token (ms-citas y ms-clinica no consultan a ms-usuarios). Preparar la respuesta para la defensa o acortar la vigencia.
+3. **Agenda rápida del Inicio (Catalina):** `proximasHorasLibres` de `citasService` no tiene endpoint en el contrato §6. En modo API, o se agrega `GET /api/disponibilidad/proximas?cantidad`, o el frontend la arma con varias llamadas a `GET /api/disponibilidad`. Hay que decidirlo antes de R9.
 
 ## Notas para la defensa
 
