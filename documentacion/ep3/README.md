@@ -54,17 +54,14 @@ Material oficial del curso (en el PC de Simon, fuera del repo): `Documentacion/e
 - La entrega debe poder levantarse con **solo Docker**: `docker compose up -d --build`, en Windows o Linux.
 - El perfil `dev` (`POST /api/dev/token`) es solo para programar. No se activa en el video ni en la entrega.
 
-## 3. Estado al 12/11/2026 y siguiente paso
+## 3. Estado al 12/11/2026 (cierre de ms-citas) y siguiente paso
 
-- **Rama `ep3/simon`, sin commit.** Contiene:
-  - la base común G-30;
-  - los 3 microservicios vacíos;
-  - Docker con Nginx;
-  - `http.js`;
-  - el contrato y el roadmap.
-- **Ya probado en el PC de Simon:** ms-usuarios, ms-citas y ms-clinica arrancan con `mvnw.cmd spring-boot:run` (H2).
-- **Falta verificar:** el primer `docker compose up -d --build` con los 5 servicios. Antes hay que borrar el contenedor viejo (`docker rm -f nutrivida-mysql`), porque ocupa el puerto 3306.
-- **Siguiente ítem:** R3, el modelo de datos de ms-citas y `database/02_citas.sql` (ver roadmap).
+- **Rama `ep3/simon-citas`: ms-citas terminado** (R1 a R10 y R12), un commit por ítem. Falta subirla (push) y unirla a `main`.
+  - Integración React → Nginx → ms-citas → MySQL probada en el navegador.
+  - `.\scripts\verificar.ps1` da PASA: 156 JUnit, PIT, 456 Vitest, Docker y peticiones de humo.
+  - Documentación: [`../integracion-ep3.md`](../integracion-ep3.md) §7, [`../ers/04-citas.md`](../ers/04-citas.md) (V3) y [`../capturas/manual-citas.md`](../capturas/manual-citas.md).
+- **Siguiente:** el video (R11), que graba Simon. Antes de grabar, ver "R11 · Preparación del video" en el roadmap.
+- **Depende de otros:** el login (G-32, Gabriel) y los catálogos de ms-clinica (C-31, Catalina). Mientras no estén, ms-citas usa las semillas de EP2 y el perfil `dev`. Lo que hay que hacer cuando lleguen está en `integracion-ep3.md` §7.6.
 - **Notas del entorno:**
   - El PC de Simon usa Java 25 localmente. En Docker siempre es Java 21.
   - `mvnw.cmd` fue corregido para rutas con espacios ("Semestre 4").
@@ -72,4 +69,4 @@ Material oficial del curso (en el PC de Simon, fuera del repo): `Documentacion/e
 
 ### Encargo sugerido para Claude Code
 
-> Lee `documentacion/ep3/README.md`, `roadmap-simon.md`, `contrato-backend.md` y `backend/README.md`. Respeta las reglas de la sección 2. Verifica la base: `docker compose up -d --build`, que `docker compose ps` muestre los 5 servicios en ejecución, `http://localhost:8080` (app), los Swagger en 8081 a 8083 y que `GET http://localhost:8082/api/citas` sin token responda 401 con el JSON común. Corre `npm test` en `frontend/`. Corrige lo que falle y haz el commit de la base. Luego sigue con R3 y actualiza el estado en `roadmap-simon.md` al terminar cada ítem.
+> Lee `documentacion/ep3/README.md`, `roadmap-simon.md`, `contrato-backend.md` y `backend/README.md`. Respeta las reglas de la sección 2. Corre `.\scripts\verificar.ps1` y confirma que da PASA. Cuando existan el login (G-32) o los catálogos de ms-clinica (C-31), sigue `integracion-ep3.md` §7.6, repite la verificación y actualiza el estado en `roadmap-simon.md`.

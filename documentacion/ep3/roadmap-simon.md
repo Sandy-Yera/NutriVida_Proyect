@@ -1,7 +1,7 @@
 # Roadmap EP3 · Simon (ms-citas e integración de citas)
 
 **Entrega: miércoles 25/11/2026** (se planifica como sección 001). Defensa: semana 17.
-Última actualización: 12/11/2026 (R7 a R10).
+Última actualización: 12/11/2026 (R1 a R12 terminados, salvo el video R11, que graba Simon).
 
 ## Decisiones tomadas
 
@@ -37,8 +37,8 @@
 | R8 | Seguridad: `@PreAuthorize` por rol y reglas de dueño con `UsuarioActual` | 19/11 | **Hecho** (12/11): rol en cada endpoint, dueño en los services y cuenta desactivada (decisión 2) con `VerificadorCuenta`. Mientras no esté el login (G-32), los tokens salen del perfil `dev` (plan B) |
 | R9 | Frontend modo dual (S-35): adaptadores API de `citasService`/`pagosService`; `Pago.jsx` en una sola llamada; 401 → `/login` | 20–21/11 | **Hecho** (12/11): `citasService` y `pagosService` en modo API con las rutas del contrato §6; `pagarYCrearCita` cobra y crea en una llamada (201 / 402 / 409); `SesionExpirada` lleva a `/login` ante un 401; token del perfil `dev` mientras no hay login (`tokenPuente.js`). 20 pruebas Vitest nuevas (456 en total) y el flujo probado en el navegador contra Docker: Mis citas desde la API y pago con tarjeta 4242 → `C0007` / `P0008` en MySQL |
 | R10 | Integración con los 3 servicios + `peticiones.http` + 4 pruebas JUnit/Mockito (transiciones, 24 h, pago doble, 403) | 22/11 | **Hecho** (12/11): `CitaServiceTest` (4 con Mockito), `ApiCitasTest` (16 de integración), `backend/ms-citas/peticiones.http` y 9 peticiones de humo autenticadas en `verificar.ps1` contra MySQL. 150 pruebas JUnit en total. Pendiente: repetirlo con el login real (G-32) y los catálogos de Catalina (C-31) |
-| R11 | **Video** (tope duro): Swagger de citas, flujo React→API→BD, paciente vs secretaria (403), recarga con sesión | **23/11** | Sin empezar |
-| R12 | Documentación (S-37): sección del documento de integración, ERS V3, manual con capturas | 24/11 | Sin empezar |
+| R11 | **Video** (tope duro): Swagger de citas, flujo React→API→BD, paciente vs secretaria (403), recarga con sesión | **23/11** | **Pendiente: lo graba Simon.** Todo lo técnico está listo. Antes de grabar, ver "R11 · Preparación del video" más abajo |
+| R12 | Documentación (S-37): sección del documento de integración, ERS V3, manual con capturas | 24/11 | **Hecho** (12/11): `integracion-ep3.md` §7, `ers/04-citas.md` en V3 (RF-CIT-10 a 15, datos, RNF, pruebas y trazabilidad) y `capturas/manual-citas.md` con 11 capturas tomadas contra Docker en modo API |
 | — | Entrega: ZIPs, enlaces, revisión en incógnito | 25/11 | — |
 
 ## Prioridad (MoSCoW)
@@ -163,6 +163,22 @@
 - **401 → `/login`.** `apiFetch` avisa con un evento y `SesionExpirada` (en `App.jsx`) lleva al login recordando la página de origen y el mensaje, por ejemplo _"Tu cuenta está desactivada."_.
 - **Plan B del token** (`tokenPuente.js`). Mientras el login de Gabriel (G-32) no exista, la sesión de EP2 se cambia por un token del perfil `dev` de ms-citas, con el mismo `JWT_SECRET`. Si el token guardado es de otro usuario, pide uno nuevo. Sin el perfil (como en la entrega), `/api/dev/token` da 404 y no se inventa nada. Cuando exista el login, este archivo se borra.
 - **Un error que solo apareció en el navegador.** Las peticiones de humo de `verificar.ps1` pasaban, pero desde el navegador todo `POST` por Nginx daba 403. El navegador manda `Origin: http://localhost:8080`, y Nginx reenviaba `Host: localhost` sin el puerto, así que Spring creía que era otro sitio y lo rechazaba por CORS. Se corrigió con `proxy_set_header Host $http_host`, y `verificar.ps1` ahora repite un `POST` con `Origin` por el proxy para que no vuelva.
+
+### R11 · Preparación del video
+
+1. **Si el login de Gabriel (G-32) y los catálogos de Catalina (C-31) ya están**, en `.env`:
+   - `MS_CITAS_PERFILES=mysql`, sin el perfil `dev`.
+   - `NUTRIVIDA_CLINICA_MODO=http` y `NUTRIVIDA_USUARIOS_MODO=http`.
+
+   Con eso se ve que los datos vienen de verdad de los otros microservicios. Si todavía no están, se graba con el modo `auto` y el perfil `dev`, y se dice en el video que es el plan B.
+2. `docker compose up -d --build` y `.\scripts\verificar.ps1 -Solo docker`. Debe dar PASA, y deja las citas de MySQL en la semilla.
+3. **Guion** (`capturas/manual-citas.md` sigue el mismo orden):
+   1. Swagger de ms-citas: `POST /api/citas` con 201, 402 y 409.
+   2. Paciente: agenda y paga en React, la cita aparece en Mis citas, F5 mantiene la sesión.
+   3. La misma cita en MySQL (`SELECT * FROM nutrivida_citas.cita`).
+   4. Secretaria: la confirma. El paciente intenta ver una cita ajena → 403.
+   5. Cancelar → pago reembolsado.
+4. `backend/ms-citas/peticiones.http` sirve de chuleta para la parte de Swagger.
 
 ### Pruebas mutantes (PIT)
 

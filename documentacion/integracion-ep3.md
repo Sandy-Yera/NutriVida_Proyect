@@ -177,3 +177,86 @@ Antes de unir, ejecutar en `frontend/`:
   - Nutricionista: sube su foto, la ve en Nosotros y al agendar, y la quita.
   - Admin: cambia la foto de otro nutricionista.
   - Paciente: no puede cancelar con menos de 24 h.
+
+## 7. Integración de ms-citas (Simon, rama `ep3/simon-citas`)
+
+Estado al 12-11-2026. El módulo de citas funciona de punta a punta: **React → Nginx → ms-citas → MySQL**. ms-citas consulta además a ms-clinica y a ms-usuarios. El detalle de cada ítem y las razones para la defensa están en [`ep3/roadmap-simon.md`](ep3/roadmap-simon.md).
+
+### 7.1 Recorrido de una petición
+
+```text
+Navegador ── :8080 ──► Nginx (frontend) ── /api/citas, /api/pagos, /api/disponibilidad ──► ms-citas :8082 ──► MySQL nutrivida_citas
+                                                                                          ├─► ms-clinica :8083  (servicios y horarios)
+                                                                                          └─► ms-usuarios :8081 (¿la cuenta sigue activa?)
+```
+
+- El navegador habla solo con `:8080`. Nginx reparte por prefijo, con la misma tabla que `vite.config.js`, así no hay CORS entre puertos.
+- ms-citas valida el JWT por su cuenta (mismo `JWT_SECRET`). No le pregunta a ms-usuarios quién es el usuario: eso viene en el token. Solo le pregunta si la cuenta sigue activa, con 30 s de memoria (decisión 2 del equipo).
+- ms-citas no guarda copia del catálogo. El precio, la duración y la modalidad de cada servicio y el horario de cada nutricionista se piden a ms-clinica en cada reserva.
+
+### 7.2 Services del frontend y endpoints (reemplaza la tabla de ms-citas de la sección 2)
+
+Con `VITE_API_MODE=api` cada función llama a su endpoint. Con `local`, o sin la variable (como en Vitest), usa los datos de EP2. Las firmas no cambiaron, así que las páginas tampoco.
+
+| Función                                          | Endpoint                                                      | Quién                                   |
+| ------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------- |
+| `listarCitas(filtros)`                           | `GET /api/citas/mias` · `/api/citas/agenda` · `/api/citas`    | Según el rol de la sesión               |
+| `obtenerCita(id)`                                | `GET /api/citas/{id}` (404 → `null`)                          | Dueño, SECRETARIA, ADMIN                |
+| `pagarYCrearCita({ reserva, tarjeta })` (nueva)  | `POST /api/citas` → 201 · 402 · 409                           | PACIENTE                                |
+| `cambiarEstado(id, estado)`                      | `PATCH /api/citas/{id}/estado`                                | Según el rol (RN-24 a RN-26)            |
+| `reprogramarCita(id, fecha, hora)`               | `PATCH /api/citas/{id}/reprogramar`                           | PACIENTE (más de 24 h), SECRETARIA, ADMIN |
+| `horariosDisponibles(nutId, fecha, dur, excluir)` | `GET /api/disponibilidad?nutricionistaId&fecha&duracion&excluir` | Público                              |
+| `proximasHorasLibres(n)`                         | `GET /api/disponibilidad/proximas?cantidad=n`                 | Público                                 |
+| `puedeAgendarTeleconsulta(pacienteId)`           | Se arma con `listarCitas` y `listarServicios`                 | PACIENTE. ms-citas la vuelve a revisar al crear |
+| `estadisticas(desde, hasta)`                     | `GET /api/citas/estadisticas?desde&hasta`                     | ADMIN                                   |
+| `obtenerPago(id)` / `listarPagos({ citaIds })`   | `GET /api/pagos/{id}` · `GET /api/pagos?citaIds`              | Dueño o ADMIN · ADMIN                   |
+| `crearCita`, `procesarPago`, `reembolsarPagoSinCita` | No existen en modo API (responden 409)                    | Pago y cita van juntos (decisión 6)     |
+
+- **El usuario sale del token.** Los parámetros `usuarioId` que reciben `cambiarEstado` y `reprogramarCita` se ignoran en modo API.
+- **401 → `/login`.** Si ms-citas responde 401 a una petición con token, `apiFetch` cierra la sesión y avisa a la app. `SesionExpirada` (en `App.jsx`) lleva a `/login` con el mensaje y la página de origen.
+
+### 7.3 Lo que ms-citas necesita de los otros microservicios
+
+Mientras los endpoints de Catalina (C-31) y de Gabriel (G-32) no existan, ms-citas usa las semillas de EP2 (modo `auto`) y **no se tocó el código de ms-clinica ni el de ms-usuarios**. Cuando los publiquen, ms-citas los usa solo, sin cambios. Para eso deben responder así:
+
+| Endpoint                     | Dueño    | Campos que lee ms-citas                                                                                               |
+| ---------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/servicios`         | Catalina | Lista (no paginada) con `codigo`, `tipo`, `nombre`, `duracionMin`, `modalidad`, `precio`, `activo`, como en EP2      |
+| `GET /api/nutricionistas`    | Catalina | Lista con `id`, `dias` (0 = domingo a 6), `horaInicio` y `horaFin` (`"HH:mm"`), como en EP2. Los campos de más se ignoran |
+| `GET /api/usuarios/{id}`     | Gabriel  | `id`, `activo`. ms-citas lo llama con el token del propio usuario, así que debe permitir que cada uno se lea a sí mismo |
+
+`.\scripts\verificar.ps1 -Solo docker` revisa estos formatos apenas los endpoints existan, y avisa qué campo falta.
+
+### 7.4 Variables de entorno de ms-citas
+
+| Variable                  | Valor por defecto        | Para el video y la entrega |
+| ------------------------- | ------------------------ | -------------------------- |
+| `NUTRIVIDA_CLINICA_MODO`  | `auto` (semillas si ms-clinica no responde) | `http`      |
+| `NUTRIVIDA_USUARIOS_MODO` | `auto`                   | `http`                     |
+| `MS_CITAS_PERFILES`       | `mysql,dev` (incluye `POST /api/dev/token`) | `mysql`     |
+| `JWT_SECRET`              | El de `.env`             | El mismo en los 3 microservicios |
+
+`http` solo se puede usar cuando C-31 y G-32 estén listos. Antes, ms-citas respondería 503.
+
+### 7.5 Cambios en archivos comunes
+
+No hay cambios en archivos de Gabriel ni de Catalina. Estos archivos son de la base común (G-30) y los usan los tres:
+
+| Archivo                   | Qué cambió                                                                                                   | Por qué                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `frontend/nginx.conf`     | `proxy_set_header Host $http_host` (antes `$host`) y la ruta `/api/dev`.                                     | Con `$host` se perdía el puerto 8080 y Spring rechazaba con **403 de CORS** todo `POST`/`PATCH`/`DELETE` del navegador, **en los 3 microservicios**. |
+| `frontend/vite.config.js` | Ruta `/api/dev` → ms-citas.                                                                                  | La misma tabla que Nginx.                                                                                 |
+| `frontend/src/App.jsx`    | `<SesionExpirada />` antes de las rutas.                                                                     | Un 401 de cualquier microservicio lleva a `/login`. También sirve para los services de Gabriel y Catalina. |
+| `docker-compose.yml`, `.env.example` | Variables de la sección 7.4.                                                                      | Modos de los clientes y perfil `dev`.                                                                     |
+
+### 7.6 Pendientes al llegar el login (G-32)
+
+1. **Borrar `services/tokenPuente.js`** y sus dos llamadas (`asegurarToken`) en `citasService.js`. Hoy cambia la sesión local de EP2 por un token del perfil `dev`. Con el login real, el token lo guarda `Login.jsx` con `guardarToken`.
+2. Pasar `NUTRIVIDA_USUARIOS_MODO` a `http` y `MS_CITAS_PERFILES` a `mysql`.
+3. **Algoritmo del JWT.** El contrato dice HS256, pero jjwt elige el algoritmo por el largo de la clave: con el `JWT_SECRET` actual (64 bytes o más) firma con **HS512**. La validación acepta los dos, así que no rompe nada. Hay que decidir si se corrige el contrato o se fija el algoritmo en el login.
+
+### 7.7 Verificación
+
+`.\scripts\verificar.ps1` (sin parámetros) da **PASA** con: 156 pruebas JUnit de ms-citas, pruebas mutantes (PIT) sin sobrevivientes nuevos, 456 pruebas de Vitest y ESLint, los 5 contenedores, el `validate` del esquema en MySQL y las peticiones de humo autenticadas: crear, 409, 402, 403, secretaria por el proxy, `POST` con `Origin` por el proxy, cancelar con reembolso y eliminar.
+
+El manual con capturas del módulo está en [`capturas/manual-citas.md`](capturas/manual-citas.md).
