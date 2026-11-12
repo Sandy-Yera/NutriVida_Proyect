@@ -36,7 +36,7 @@
 | R7 | API + Swagger (S-31 a S-33): endpoints de `contrato-backend.md` §6, DTOs, `@Valid` | 17–18/11 | **Hecho** (12/11): 13 endpoints en 3 controladores (incluye `/api/disponibilidad/proximas`, decisión 3), `CitaService`, `PagoService` y `DisponibilidadService`; Swagger con ejemplos y códigos de respuesta |
 | R8 | Seguridad: `@PreAuthorize` por rol y reglas de dueño con `UsuarioActual` | 19/11 | **Hecho** (12/11): rol en cada endpoint, dueño en los services y cuenta desactivada (decisión 2) con `VerificadorCuenta`. Mientras no esté el login (G-32), los tokens salen del perfil `dev` (plan B) |
 | R9 | Frontend modo dual (S-35): adaptadores API de `citasService`/`pagosService`; `Pago.jsx` en una sola llamada; 401 → `/login` | 20–21/11 | Sin empezar |
-| R10 | Integración con los 3 servicios + `peticiones.http` + 4 pruebas JUnit/Mockito (transiciones, 24 h, pago doble, 403) | 22/11 | Sin empezar |
+| R10 | Integración con los 3 servicios + `peticiones.http` + 4 pruebas JUnit/Mockito (transiciones, 24 h, pago doble, 403) | 22/11 | **Hecho** (12/11): `CitaServiceTest` (4 con Mockito), `ApiCitasTest` (16 de integración), `backend/ms-citas/peticiones.http` y 9 peticiones de humo autenticadas en `verificar.ps1` contra MySQL. 150 pruebas JUnit en total. Pendiente: repetirlo con el login real (G-32) y los catálogos de Catalina (C-31) |
 | R11 | **Video** (tope duro): Swagger de citas, flujo React→API→BD, paciente vs secretaria (403), recarga con sesión | **23/11** | Sin empezar |
 | R12 | Documentación (S-37): sección del documento de integración, ERS V3, manual con capturas | 24/11 | Sin empezar |
 | — | Entrega: ZIPs, enlaces, revisión en incógnito | 25/11 | — |
@@ -140,6 +140,17 @@
 - **Mismos tres modos que ms-clinica** (`NUTRIVIDA_USUARIOS_MODO`). `GET /api/usuarios/{id}` todavía no existe (G-32), y ms-usuarios responde 404 _"La ruta solicitada no existe."_. En modo `auto`, ms-citas lo reconoce y usa las semillas de EP2, con las 9 cuentas activas. Un usuario que no está en las semillas (un paciente recién registrado) no se bloquea. Un 401 o un 404 del usuario sí significa que ms-usuarios no reconoce la cuenta.
 - **Si ms-usuarios no responde en modo `http`**, la respuesta es **503** con el JSON común, no un 500. El filtro le pasa el error a `GlobalExceptionHandler`, igual que los 401 y 403.
 - **Plan B mientras no hay login.** El perfil `dev` agrega `POST /api/dev/token` y está activo por defecto en `docker-compose.yml` (`MS_CITAS_PERFILES=mysql,dev`). **Para el video y la entrega se apaga** con `MS_CITAS_PERFILES=mysql` en `.env`; `verificar.ps1` muestra si quedó activo.
+
+### R10 · Integración y pruebas de la API
+
+- **Cuatro niveles de prueba, de más rápido a más real:**
+  1. `ReglasCitaTest` y `ReglasPagoTest` (R5): funciones puras, con PIT.
+  2. `CitaServiceTest`: el service con Mockito. Repositorios y usuario del token son mocks, sin Spring ni base. Las 4 pruebas del plan: transición no permitida, 24 h, pago (rechazado sin cita y hora tomada sin cobro) y 403 de dueño.
+  3. `ApiCitasTest`: la API completa sobre H2 con JWT reales, `@PreAuthorize` y las semillas de ms-clinica y ms-usuarios. 16 recorridos: crear, 409, 402, 400, teleconsulta, cada rol con lo suyo, dueño, ciclo de vida, cancelar → reembolso → eliminar, 24 h justas, reprogramar, disponibilidad y estadísticas.
+  4. `verificar.ps1 -Solo docker`: 9 peticiones contra los contenedores reales con MySQL y Nginx. Crea una cita, repite la hora (409), paga con la tarjeta rechazada (402), pide la cita como otro paciente (403) y como secretaria por el proxy, la cancela (reembolso) y la elimina.
+- **Reloj fijo.** Las pruebas de la API corren "el lunes 16/11/2026 a las 08:00" (`ApoyoApi`): "mañana a las 08:00" está a 24 h justas, el borde exacto de RN-06. Por eso `CitaService` lee la hora de un `Clock` y no de `LocalDateTime.now()`.
+- **"Pago doble"** ya no puede ocurrir como en EP2, porque el pago y la cita nacen en la misma petición. La prueba revisa los dos casos que quedan: un rechazo guarda el pago sin cita, y una hora tomada se rechaza antes de cobrar.
+- **`peticiones.http`** recorre el contrato §6 en orden, para la extensión REST Client de VS Code: tokens, disponibilidad, crear, 409, 402, 400, 403, consultas por rol, estados, reprogramar, 24 h, eliminar y estadísticas. Sirve de guion para la parte de Swagger del video.
 
 ### Pruebas mutantes (PIT)
 

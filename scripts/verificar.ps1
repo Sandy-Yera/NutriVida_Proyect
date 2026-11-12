@@ -57,6 +57,24 @@ function Pedir([string]$url) {
     return @{ Status = $status; Cuerpo = $cuerpo }
 }
 
+# Como Pedir, pero con método, cuerpo JSON y token. El cuerpo va por archivo (--data-binary @):
+# PowerShell 5.1 rompe las comillas de un JSON pasado como argumento a curl.exe.
+function PedirApi([string]$metodo, [string]$url, [string]$cuerpo = '', [string]$token = '') {
+    $argumentos = @('-s', '--max-time', '15', '-X', $metodo, '-w', "`n%{http_code}")
+    if ($token) { $argumentos += @('-H', "Authorization: Bearer $token") }
+    if ($cuerpo) {
+        $archivo = Join-Path $env:TEMP 'nutrivida-verificar-cuerpo.json'
+        [IO.File]::WriteAllText($archivo, $cuerpo, (New-Object Text.UTF8Encoding $false))
+        $argumentos += @('-H', 'Content-Type: application/json', '--data-binary', "@$archivo")
+    }
+    $salida = & curl.exe @argumentos $url 2>$null
+    if (-not $salida) { return @{ Status = 0; Cuerpo = '' } }
+    $lineas = @($salida)
+    $status = [int]$lineas[-1]
+    $texto = if ($lineas.Count -gt 1) { ($lineas[0..($lineas.Count - 2)] -join "`n") } else { '' }
+    return @{ Status = $status; Cuerpo = $texto }
+}
+
 function EsErrorComun([string]$cuerpo, [int]$status) {
     foreach ($campo in '"timestamp"', '"status"', '"error"', '"mensaje"', '"ruta"') {
         if ($cuerpo -notmatch [regex]::Escape($campo)) { return $false }
@@ -264,6 +282,66 @@ try {
             $citas = ConsultaCitas 'SELECT COUNT(*) FROM nutrivida_citas.cita'
             $pagos = ConsultaCitas 'SELECT COUNT(*) FROM nutrivida_citas.pago'
             Anotar 'Semillas de citas' (($citas -match '^\d+$') -and [int]$citas -gt 0) "citas: $citas, pagos: $pagos"
+        }
+
+        # R8: con qué cliente de ms-usuarios revisa ms-citas que la cuenta siga activa.
+        $modoUsuarios = ([regex]::Match($logMs, 'ms-usuarios: modo (.+)$', 'Multiline')).Groups[1].Value.Trim()
+        Anotar 'ms-citas -> ms-usuarios (modo)' ([bool]$modoUsuarios) $(if ($modoUsuarios) { $modoUsuarios } else { 'falta la línea "ms-usuarios: modo" en el log' })
+
+        # R7 y R10: humo autenticado contra la API real (MySQL, JWT, roles y dueño). Los tokens
+        # salen del perfil dev (plan B). Sin el perfil, que es como se entrega, se omite.
+        $api = 'http://localhost:8082'
+        $tokenDe = {
+            param($id, $rol)
+            $r = PedirApi 'POST' "$api/api/dev/token" ('{"id":"' + $id + '","rol":"' + $rol + '"}')
+            if ($r.Status -eq 200) { return ($r.Cuerpo | ConvertFrom-Json).token }
+            return $null
+        }
+        $prueba = PedirApi 'POST' "$api/api/dev/token" '{"id":"U100","rol":"PACIENTE"}'
+        if ($prueba.Status -eq 404) {
+            Anotar 'Perfil dev de ms-citas' $true 'apagado (modo entrega): humo autenticado omitido'
+        } elseif ($prueba.Status -ne 200) {
+            Anotar 'Perfil dev de ms-citas' $false "POST /api/dev/token respondió HTTP $($prueba.Status)"
+        } else {
+            Anotar 'Perfil dev de ms-citas' $true 'ACTIVO (plan B). Para el video: MS_CITAS_PERFILES=mysql en .env'
+            $paciente = & $tokenDe 'U100' 'PACIENTE'
+            $otro = & $tokenDe 'U101' 'PACIENTE'
+            $secretaria = & $tokenDe 'U002' 'SECRETARIA'
+            $admin = & $tokenDe 'U001' 'ADMIN'
+
+            # PowerShell 5.1 entrega el arreglo JSON como un solo objeto: ForEach-Object lo desenrolla.
+            $libres = @((PedirApi 'GET' "$api/api/disponibilidad/proximas?cantidad=20").Cuerpo | ConvertFrom-Json | ForEach-Object { $_ })
+            Anotar 'GET /api/disponibilidad/proximas' ($libres.Count -ge 2) "$($libres.Count) horas libres"
+            if ($libres.Count -ge 2) {
+                $reserva = {
+                    param($hora, $numero)
+                    '{"servicioCodigo":"CN002","nutricionistaId":"' + $hora.nutricionistaId + '","fecha":"' + $hora.fecha +
+                        '","hora":"' + $hora.hora + '","motivo":"Prueba de humo de verificar.ps1",' +
+                        '"tarjeta":{"titular":"Prueba Humo","numero":"' + $numero + '","vencimiento":"12/30","cvv":"123"}}'
+                }
+                $r = PedirApi 'POST' "$api/api/citas" (& $reserva $libres[0] '4242424242424242') $paciente
+                $cita = if ($r.Status -eq 201) { $r.Cuerpo | ConvertFrom-Json } else { $null }
+                Anotar 'POST /api/citas (pago + cita)' ([bool]$cita) $(if ($cita) { "201: $($cita.id) PENDIENTE con pago $($cita.pagoId)" } else { "HTTP $($r.Status) $($r.Cuerpo)" })
+
+                $r = PedirApi 'POST' "$api/api/citas" (& $reserva $libres[0] '4242424242424242') $otro
+                Anotar 'Misma hora otra vez' (($r.Status -eq 409) -and (EsErrorComun $r.Cuerpo 409)) "HTTP $($r.Status)"
+                $r = PedirApi 'POST' "$api/api/citas" (& $reserva $libres[1] '4000000000000002') $paciente
+                Anotar 'Tarjeta rechazada' (($r.Status -eq 402) -and (EsErrorComun $r.Cuerpo 402)) "HTTP $($r.Status)"
+
+                if ($cita) {
+                    $r = PedirApi 'GET' "$api/api/citas/$($cita.id)" '' $otro
+                    Anotar 'Cita de otro paciente' (($r.Status -eq 403) -and (EsErrorComun $r.Cuerpo 403)) "HTTP $($r.Status)"
+                    $r = PedirApi 'GET' "http://localhost:8080/api/citas/$($cita.id)" '' $secretaria
+                    Anotar 'Secretaria la ve (proxy :8080)' ($r.Status -eq 200) "HTTP $($r.Status)"
+                    $r = PedirApi 'PATCH' "$api/api/citas/$($cita.id)/estado" '{"estado":"CANCELADA"}' $secretaria
+                    $cancelada = $r.Status -eq 200
+                    $r = PedirApi 'GET' "$api/api/pagos/$($cita.pagoId)" '' $paciente
+                    $reembolso = ($r.Status -eq 200) -and ($r.Cuerpo -match '"REEMBOLSADO"')
+                    Anotar 'Cancelar reembolsa el pago' ($cancelada -and $reembolso) "cancelada: $cancelada, reembolsado: $reembolso"
+                    $r = PedirApi 'DELETE' "$api/api/citas/$($cita.id)" '' $admin
+                    Anotar 'DELETE de la cita cancelada' ($r.Status -eq 204) "HTTP $($r.Status)"
+                }
+            }
         }
     }
 }
