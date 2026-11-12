@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import FotoNutricionista from "./FotoNutricionista.jsx";
 import { describirDias, urlSolicitarCita } from "../../utils/clinica.js";
 
 export default function TarjetaNutricionista({ nutricionista }) {
@@ -9,7 +10,8 @@ export default function TarjetaNutricionista({ nutricionista }) {
       className="bg-white border rounded-3 p-3 h-100 d-flex flex-column"
       aria-labelledby={`nutricionista-${nutricionista.id}`}
     >
-      <h3 id={`nutricionista-${nutricionista.id}`} className="h5 mb-1">
+      <FotoNutricionista nutricionista={nutricionista} tamano={88} />
+      <h3 id={`nutricionista-${nutricionista.id}`} className="h5 mt-3 mb-1">
         {nutricionista.nombre}
       </h3>
       <p className="text-body-secondary mb-3">{nutricionista.especialidad}</p>

@@ -1,13 +1,15 @@
 import { guardar, leer } from "./almacen.js";
 import { pagosSemilla } from "./semillas/pagos.js";
 import { aFechaIso } from "../utils/formato.js";
+import { errorDeCampo, errorNoEncontrado } from "../utils/errores.js";
 
 const CLAVE = "nv_pagos";
 
 export const ESTADOS_PAGO = ["APROBADO", "RECHAZADO", "REEMBOLSADO"];
 
 function validarEstado(estado) {
-  if (!ESTADOS_PAGO.includes(estado)) throw new Error("El estado del pago no es válido.");
+  if (!ESTADOS_PAGO.includes(estado))
+    throw errorDeCampo("estado", "El estado del pago no es válido.");
 }
 
 function siguienteId(pagos) {
@@ -17,7 +19,7 @@ function siguienteId(pagos) {
 
 function buscarIndice(pagos, id) {
   const indice = pagos.findIndex((p) => p.id === id);
-  if (indice === -1) throw new Error(`El pago ${id} no existe.`);
+  if (indice === -1) throw errorNoEncontrado(`El pago ${id} no existe.`);
   return indice;
 }
 

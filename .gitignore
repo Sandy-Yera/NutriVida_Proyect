@@ -12,5 +12,8 @@ logs/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+# Notas locales en Markdown fuera del repo, pero nunca la documentación ni los README:
+# antes "*.md" dejaba fuera, sin aviso, cualquier documento nuevo (ERS, EP3, backend).
 *.md
-!/README.md
+!README.md
+!/documentacion/**/*.md

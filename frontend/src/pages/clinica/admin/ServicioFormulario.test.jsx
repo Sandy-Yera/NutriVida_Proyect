@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import ServicioFormulario from "./ServicioFormulario.jsx";
 import AdminServicios from "./AdminServicios.jsx";
 import { obtenerServicio } from "../../../services/serviciosService.js";
+import { iniciarSesion } from "../../../auth/auth.js";
 
 function renderizar(ruta) {
   render(
@@ -18,6 +19,11 @@ function renderizar(ruta) {
 }
 
 describe("ServicioFormulario", () => {
+  // Preparación EP3: crear, editar y desactivar servicios exige la sesión del administrador.
+  beforeEach(() => {
+    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+  });
+
   it("edita el precio y vuelve al listado con el aviso", async () => {
     renderizar("/admin/servicios/CN001");
 

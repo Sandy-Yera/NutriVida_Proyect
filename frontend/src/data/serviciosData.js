@@ -1,18 +1,13 @@
 import { guardar, leer } from "./almacen.js";
 import { serviciosSemilla } from "./semillas/servicios.js";
 import { filtrarServicios } from "../utils/clinica.js";
+import { errorConflicto, errorDeCampo, errorNoEncontrado } from "../utils/errores.js";
 
 const CLAVE = "nv_servicios";
 
 export const TIPOS_SERVICIO = ["CONSULTA", "PLAN", "EVALUACION", "TALLER"];
 
 const FORMATO_CODIGO = /^[A-Z]{2}\d{3}$/;
-
-function errorDeCampo(campo, mensaje) {
-  const error = new Error(mensaje);
-  error.campo = campo;
-  return error;
-}
 
 function ajustarPorTipo(servicio) {
   const ajustado = { ...servicio };
@@ -43,7 +38,7 @@ export function crear(datos) {
     throw errorDeCampo("codigo", "El código debe tener 2 letras y 3 números, por ejemplo CN006.");
   }
   if (servicios.some((s) => s.codigo === codigo)) {
-    throw errorDeCampo("codigo", "Ya existe un servicio con ese código.");
+    throw errorConflicto("Ya existe un servicio con ese código.", { campo: "codigo" });
   }
   if (!TIPOS_SERVICIO.includes(datos.tipo)) {
     throw errorDeCampo("tipo", "El tipo de servicio no es válido.");
@@ -67,7 +62,7 @@ export function crear(datos) {
 export function actualizar(codigo, cambios) {
   const servicios = leer(CLAVE, serviciosSemilla);
   const indice = servicios.findIndex((s) => s.codigo === codigo);
-  if (indice === -1) throw new Error("El servicio no existe.");
+  if (indice === -1) throw errorNoEncontrado("El servicio no existe.");
   if (cambios.tipo !== undefined && !TIPOS_SERVICIO.includes(cambios.tipo)) {
     throw errorDeCampo("tipo", "El tipo de servicio no es válido.");
   }

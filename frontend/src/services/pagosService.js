@@ -1,5 +1,6 @@
 import * as pagosData from "../data/pagosData.js";
 import { simularPago, soloDigitos, validarPago } from "../utils/pagos.js";
+import { errorConflicto, errorNoEncontrado, errorValidacion } from "../utils/errores.js";
 
 // RN-18 a RN-21: valida la tarjeta, simula el cobro y guarda solo los 4 últimos dígitos.
 // La validación de la tarjeta va aquí porque pagosData nunca recibe el número completo.
@@ -7,9 +8,7 @@ export async function procesarPago({ titular, numero, vencimiento, cvv, monto })
   const errores = validarPago({ titular, numero, vencimiento, cvv });
   if (!(Number(monto) > 0)) errores.monto = "El monto a pagar no es válido.";
   if (Object.keys(errores).length > 0) {
-    const error = new Error("Revisa los datos de la tarjeta.");
-    error.errores = errores;
-    throw error;
+    throw errorValidacion("Revisa los datos de la tarjeta.", { errores });
   }
   const { estado, motivo } = simularPago(numero);
   const pago = pagosData.crear({
@@ -27,9 +26,9 @@ export async function procesarPago({ titular, numero, vencimiento, cvv, monto })
 // Es una función nueva: no cambia el contrato.
 export async function reembolsarPagoSinCita(id) {
   const pago = pagosData.obtener(id);
-  if (!pago) throw new Error(`El pago ${id} no existe.`);
+  if (!pago) throw errorNoEncontrado(`El pago ${id} no existe.`);
   if (pago.estado !== "APROBADO" || pago.citaId) {
-    throw new Error("Solo se reembolsa un pago aprobado que no quedó asociado a una cita.");
+    throw errorConflicto("Solo se reembolsa un pago aprobado que no quedó asociado a una cita.");
   }
   return pagosData.actualizar(id, { estado: "REEMBOLSADO" });
 }

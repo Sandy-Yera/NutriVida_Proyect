@@ -29,4 +29,17 @@ describe("TarjetaNutricionista", () => {
       "/citas/solicitar?nutricionista=NUT001",
     );
   });
+
+  it("muestra la foto cuando el nutricionista tiene una y las iniciales cuando no", () => {
+    render(
+      <MemoryRouter>
+        <TarjetaNutricionista nutricionista={{ ...carolina, fotoUrl: "/fotos/nut001.jpg" }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("img", { name: "Foto de Carolina Fuentes M." })).toHaveAttribute(
+      "src",
+      "/fotos/nut001.jpg",
+    );
+  });
 });

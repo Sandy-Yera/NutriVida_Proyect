@@ -2,7 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import Planes from "./Planes.jsx";
-import { cambiarEstadoServicio } from "../../services/serviciosService.js";
+// Preparación de datos sin pasar por el permiso de administrador del service.
+import { cambiarEstado as cambiarEstadoServicio } from "../../data/serviciosData.js";
 
 function renderizarPlanes() {
   render(

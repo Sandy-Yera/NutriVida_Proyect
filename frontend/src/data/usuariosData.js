@@ -1,6 +1,7 @@
 import { guardar, leer } from "./almacen.js";
 import { usuariosSemilla } from "./semillas/usuarios.js";
 import { ROLES } from "../config/roles.js";
+import { errorConflicto, errorDeCampo, errorNoEncontrado } from "../utils/errores.js";
 
 const CLAVE = "nv_usuarios";
 
@@ -45,11 +46,8 @@ function coincideTexto(usuario, texto) {
   );
 }
 
-export function errorDeCampo(campo, mensaje) {
-  const error = new Error(mensaje);
-  error.campo = campo;
-  return error;
-}
+// Se re-exporta para no romper a quien ya lo importaba desde aquí.
+export { errorDeCampo };
 
 function validarUnicos(usuarios, datos, idExcluido = null) {
   const otros = usuarios.filter((u) => u.id !== idExcluido);
@@ -57,16 +55,18 @@ function validarUnicos(usuarios, datos, idExcluido = null) {
     datos.correo !== undefined &&
     otros.some((u) => normalizarCorreo(u.correo) === normalizarCorreo(datos.correo))
   ) {
-    throw errorDeCampo("correo", "Ya existe un usuario con ese correo.");
+    throw errorConflicto("Ya existe un usuario con ese correo.", { campo: "correo" });
   }
   if (
     datos.rut !== undefined &&
     otros.some((u) => normalizarRut(u.rut) === normalizarRut(datos.rut))
   ) {
-    throw errorDeCampo("rut", "Ya existe un usuario con ese RUT.");
+    throw errorConflicto("Ya existe un usuario con ese RUT.", { campo: "rut" });
   }
   if (datos.nutricionistaId && otros.some((u) => u.nutricionistaId === datos.nutricionistaId)) {
-    throw errorDeCampo("nutricionistaId", "Ese nutricionista ya está vinculado a otro usuario.");
+    throw errorConflicto("Ese nutricionista ya está vinculado a otro usuario.", {
+      campo: "nutricionistaId",
+    });
   }
 }
 
@@ -76,7 +76,7 @@ function validarRol(rol) {
 
 function buscarIndice(usuarios, id) {
   const indice = usuarios.findIndex((u) => u.id === id);
-  if (indice === -1) throw new Error("El usuario no existe.");
+  if (indice === -1) throw errorNoEncontrado("El usuario no existe.");
   return indice;
 }
 

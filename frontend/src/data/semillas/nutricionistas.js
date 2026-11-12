@@ -1,3 +1,5 @@
+// fotoUrl: null mientras el nutricionista no suba su foto. En EP3 es la URL que entrega
+// ms-clinica (GET /api/nutricionistas/{id}/foto); en EP2, una imagen data: guardada en el navegador.
 export const nutricionistasSemilla = [
   {
     id: "NUT001",
@@ -7,6 +9,7 @@ export const nutricionistasSemilla = [
     dias: [1, 3, 5],
     horaInicio: "09:00",
     horaFin: "17:00",
+    fotoUrl: null,
   },
   {
     id: "NUT002",
@@ -16,6 +19,7 @@ export const nutricionistasSemilla = [
     dias: [2, 4, 6],
     horaInicio: "09:00",
     horaFin: "14:00",
+    fotoUrl: null,
   },
   {
     id: "NUT003",
@@ -25,6 +29,7 @@ export const nutricionistasSemilla = [
     dias: [1, 2, 3, 4, 5],
     horaInicio: "08:00",
     horaFin: "13:00",
+    fotoUrl: null,
   },
   {
     id: "NUT004",
@@ -34,5 +39,6 @@ export const nutricionistasSemilla = [
     dias: [2, 3, 4, 5],
     horaInicio: "14:00",
     horaFin: "19:00",
+    fotoUrl: null,
   },
 ];

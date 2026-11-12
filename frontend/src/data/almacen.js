@@ -1,6 +1,13 @@
+// Si lo guardado está dañado (JSON inválido), se vuelve a la semilla en vez de romper la app.
 export function leer(clave, semilla) {
   const guardado = localStorage.getItem(clave);
-  if (guardado) return JSON.parse(guardado);
+  if (guardado) {
+    try {
+      return JSON.parse(guardado);
+    } catch {
+      localStorage.removeItem(clave);
+    }
+  }
   localStorage.setItem(clave, JSON.stringify(semilla));
   return JSON.parse(JSON.stringify(semilla));
 }

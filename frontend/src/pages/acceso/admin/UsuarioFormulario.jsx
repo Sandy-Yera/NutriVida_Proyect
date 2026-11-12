@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import FormUsuario from "../../../components/acceso/FormUsuario.jsx";
+import EditorFotoNutricionista from "../../../components/clinica/EditorFotoNutricionista.jsx";
 import { obtenerSesion } from "../../../auth/auth.js";
 import { listarNutricionistas } from "../../../services/serviciosService.js";
 import {
@@ -53,6 +54,16 @@ export default function UsuarioFormulario() {
     });
   }
 
+  // El admin también puede cambiar la foto de un nutricionista (la ve el público en Nosotros).
+  function actualizarFoto(actualizado) {
+    setCarga((previa) => ({
+      ...previa,
+      nutricionistas: previa.nutricionistas.map((n) =>
+        n.id === actualizado.id ? { ...n, fotoUrl: actualizado.fotoUrl } : n,
+      ),
+    }));
+  }
+
   const titulo = esNuevo ? "Nuevo usuario" : "Editar usuario";
 
   if (carga === null || carga.id !== id) {
@@ -76,6 +87,11 @@ export default function UsuarioFormulario() {
     );
   }
 
+  const fichaNutricionista =
+    !esNuevo && carga.usuario.rol === "NUTRICIONISTA"
+      ? carga.nutricionistas.find((n) => n.id === carga.usuario.nutricionistaId)
+      : null;
+
   return (
     <section>
       <nav aria-label="Ruta de navegación">
@@ -97,6 +113,12 @@ export default function UsuarioFormulario() {
         onGuardar={guardar}
         onCancelar={() => navigate("/admin/usuarios")}
       />
+      {fichaNutricionista && (
+        <div className="bg-white border rounded-3 p-3 p-md-4 mt-4">
+          <h2 className="h5 mb-3">Foto de {fichaNutricionista.nombre}</h2>
+          <EditorFotoNutricionista nutricionista={fichaNutricionista} onCambio={actualizarFoto} />
+        </div>
+      )}
     </section>
   );
 }

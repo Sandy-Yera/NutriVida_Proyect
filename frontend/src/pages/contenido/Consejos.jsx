@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ArticuloCard from "../../components/acceso/ArticuloCard.jsx";
-import { articulosSemilla } from "../../data/semillas/articulos.js";
+import { listarArticulos } from "../../services/articulosService.js";
 import { listarNutricionistas } from "../../services/serviciosService.js";
 
-const ARTICULOS = [...articulosSemilla].sort((a, b) => b.fecha.localeCompare(a.fecha));
-
 export default function Consejos() {
-  const [nutricionistas, setNutricionistas] = useState(null);
+  const [carga, setCarga] = useState(null);
 
   useEffect(() => {
     let vigente = true;
-    listarNutricionistas().then((lista) => {
-      if (vigente) setNutricionistas(lista);
+    Promise.all([listarArticulos(), listarNutricionistas()]).then(([articulos, nutricionistas]) => {
+      if (vigente) setCarga({ articulos, nutricionistas });
     });
     return () => {
       vigente = false;
@@ -20,8 +18,9 @@ export default function Consejos() {
   }, []);
 
   function contenido() {
-    if (nutricionistas === null) return <p role="status">Cargando consejos...</p>;
-    if (ARTICULOS.length === 0) {
+    if (carga === null) return <p role="status">Cargando consejos...</p>;
+    const { articulos, nutricionistas } = carga;
+    if (articulos.length === 0) {
       return (
         <div className="bg-white border rounded-3 p-4">
           <p>Aún no hay consejos publicados.</p>
@@ -33,7 +32,7 @@ export default function Consejos() {
     }
     return (
       <div className="row g-3">
-        {ARTICULOS.map((articulo) => (
+        {articulos.map((articulo) => (
           <div className="col-12 col-md-6" key={articulo.id}>
             <ArticuloCard
               articulo={articulo}

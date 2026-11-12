@@ -4,6 +4,7 @@ import ChipEstado from "../../components/citas/ChipEstado.jsx";
 import PasosWizard from "../../components/citas/PasosWizard.jsx";
 import ResumenCita from "../../components/citas/ResumenCita.jsx";
 import SelectorHorario from "../../components/citas/SelectorHorario.jsx";
+import FotoNutricionista from "../../components/clinica/FotoNutricionista.jsx";
 import { obtenerSesion } from "../../auth/auth.js";
 // nv_reserva es estado de la interfaz (vive en el navegador), no un dato del negocio:
 // en EP3 los services pasan a la API, pero la reserva en curso sigue en la pestaña.
@@ -396,7 +397,7 @@ function PasoNutricionista({ nutricionistas, seleccionado, onSeleccionar }) {
           const id = `nutricionista-${nutricionista.id}`;
           return (
             <div key={nutricionista.id} className="col-12 col-md-6">
-              <div className="form-check border rounded-2 p-2 ps-5 h-100">
+              <div className="form-check border rounded-2 p-2 ps-5 h-100 d-flex gap-2">
                 <input
                   className="form-check-input"
                   type="radio"
@@ -405,14 +406,17 @@ function PasoNutricionista({ nutricionistas, seleccionado, onSeleccionar }) {
                   checked={seleccionado === nutricionista.id}
                   onChange={() => onSeleccionar(nutricionista.id)}
                 />
-                <label className="form-check-label d-block fw-semibold" htmlFor={id}>
-                  {nutricionista.nombre}
-                </label>
-                <span className="small d-block">{nutricionista.especialidad}</span>
-                <span className="small text-body-secondary">
-                  {describirDias(nutricionista.dias)}, {nutricionista.horaInicio} a{" "}
-                  {nutricionista.horaFin}
-                </span>
+                <FotoNutricionista nutricionista={nutricionista} tamano={48} decorativa />
+                <div>
+                  <label className="form-check-label d-block fw-semibold" htmlFor={id}>
+                    {nutricionista.nombre}
+                  </label>
+                  <span className="small d-block">{nutricionista.especialidad}</span>
+                  <span className="small text-body-secondary">
+                    {describirDias(nutricionista.dias)}, {nutricionista.horaInicio} a{" "}
+                    {nutricionista.horaFin}
+                  </span>
+                </div>
               </div>
             </div>
           );

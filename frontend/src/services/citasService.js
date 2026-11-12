@@ -2,6 +2,14 @@ import * as citasData from "../data/citasData.js";
 import * as pagosData from "../data/pagosData.js";
 import * as citasUtils from "../utils/citas.js";
 import {
+  errorConflicto,
+  errorDeCampo,
+  errorNoEncontrado,
+  errorProhibido,
+} from "../utils/errores.js";
+import { exigirActor } from "./actor.js";
+import { obtener as obtenerUsuarioData } from "../data/usuariosData.js";
+import {
   listarNutricionistas,
   listarServicios,
   obtenerNutricionista,
@@ -16,18 +24,20 @@ const esPresencial = (servicio) => servicio.modalidad.startsWith("Presencial");
 async function exigirHoraDisponible({ nutricionistaId, fecha, hora, duracionMin }, idExcluido) {
   const ahora = new Date();
   const errorFecha = citasUtils.validarFechaCita(fecha, ahora);
-  if (errorFecha) throw new Error(errorFecha);
+  if (errorFecha) throw errorDeCampo("fecha", errorFecha);
 
   const [citas, nutricionista] = await Promise.all([
     citasData.listar(),
     obtenerNutricionista(nutricionistaId),
   ]);
-  if (!nutricionista) throw new Error("El nutricionista elegido no existe.");
+  if (!nutricionista) throw errorNoEncontrado("El nutricionista elegido no existe.");
 
   const otras = citas.filter((c) => c.id !== idExcluido);
   const libres = citasUtils.horariosDisponibles(nutricionista, fecha, otras, duracionMin, ahora);
   if (!libres.includes(hora)) {
-    throw new Error("Esa hora no está disponible con este nutricionista. Elige otra.");
+    throw errorConflicto("Esa hora no está disponible con este nutricionista. Elige otra.", {
+      campo: "hora",
+    });
   }
 }
 
@@ -60,26 +70,89 @@ export async function crearCita(datos) {
     pagosData.obtener(datos.pagoId),
     obtenerServicio(datos.servicioCodigo),
   ]);
-  if (!servicio || !servicio.activo) throw new Error("El servicio elegido no está disponible.");
-  if (!pago) throw new Error("La cita necesita un pago registrado.");
-  if (pago.estado !== "APROBADO") throw new Error("El pago no fue aprobado.");
-  if (pago.citaId) throw new Error("Ese pago ya está asociado a otra cita.");
+  exigirPaciente(datos.pacienteId);
+  if (!servicio || !servicio.activo) {
+    throw errorDeCampo("servicioCodigo", "El servicio elegido no está disponible.");
+  }
+  if (!pago) throw errorDeCampo("pagoId", "La cita necesita un pago registrado.");
+  if (pago.estado !== "APROBADO") throw errorConflicto("El pago no fue aprobado.");
+  if (pago.citaId) throw errorConflicto("Ese pago ya está asociado a otra cita.");
   if (pago.monto !== servicio.precio) {
-    throw new Error("El monto pagado no coincide con el precio del servicio.");
+    throw errorConflicto("El monto pagado no coincide con el precio del servicio.");
   }
   if (!esPresencial(servicio) && !(await puedeAgendarTeleconsulta(datos.pacienteId))) {
-    throw new Error("La teleconsulta requiere haber tenido antes una consulta presencial.");
+    throw errorConflicto("La teleconsulta requiere haber tenido antes una consulta presencial.");
   }
   await exigirHoraDisponible({ ...datos, duracionMin: servicio.duracionMin });
 
+  // Sección crítica, sin ningún await: entre los await de arriba otra pestaña pudo usar este
+  // pago, así que se vuelve a leer y se revisa justo antes de escribir. citasData.crear repite
+  // el choque de horario (RN-10) en el mismo paso. Revisar, crear y enlazar no se separan.
+  // En EP3 esto es un solo @Transactional en ms-citas (con UNIQUE en cita.pago_id).
+  const pagoActual = pagosData.obtener(pago.id);
+  if (pagoActual?.estado !== "APROBADO") throw errorConflicto("El pago no fue aprobado.");
+  if (pagoActual.citaId) throw errorConflicto("Ese pago ya está asociado a otra cita.");
   const cita = citasData.crear({ ...datos, duracionMin: servicio.duracionMin });
   pagosData.actualizar(pago.id, { citaId: cita.id });
   return cita;
 }
 
-// RN-08: al cancelar, el pago de la cita pasa a REEMBOLSADO.
+// RN-24 a RN-26 y RN-06: qué puede hacer cada rol sobre una cita. La página ya esconde los
+// botones que no corresponden; aquí se vuelve a revisar porque en EP3 esta función será un
+// endpoint (PATCH /api/citas/{id}/estado) y cualquiera podría llamarlo sin pasar por la página.
+const ACCIONES_POR_ROL = {
+  PACIENTE: ["CANCELADA"],
+  NUTRICIONISTA: ["ATENDIDA", "INASISTENCIA"],
+  SECRETARIA: ["CONFIRMADA", "CANCELADA", "INASISTENCIA"],
+  ADMIN: ["CONFIRMADA", "CANCELADA", "ATENDIDA", "INASISTENCIA"],
+};
+
+export const MENSAJE_24H =
+  "Solo puedes cancelar o reprogramar con más de 24 horas de anticipación. Llama a la clínica.";
+
+function exigirCita(id) {
+  const cita = citasData.obtener(id);
+  if (!cita) throw errorNoEncontrado(`La cita ${id} no existe.`);
+  return cita;
+}
+
+function exigirPaciente(pacienteId) {
+  const paciente = pacienteId ? obtenerUsuarioData(pacienteId) : null;
+  if (!paciente || paciente.rol !== "PACIENTE" || !paciente.activo) {
+    throw errorDeCampo("pacienteId", "La cita debe ser de un paciente con cuenta activa.");
+  }
+}
+
+// La cita tiene que ser "suya": del paciente que la pidió o del nutricionista que atiende.
+function exigirCitaPropia(actor, cita) {
+  if (actor.rol === "PACIENTE" && cita.pacienteId !== actor.id) {
+    throw errorProhibido("Esa cita no es tuya.");
+  }
+  if (actor.rol === "NUTRICIONISTA" && cita.nutricionistaId !== actor.nutricionistaId) {
+    throw errorProhibido("Esa cita no está en tu agenda.");
+  }
+}
+
+// RN-02 a RN-08: valida el actor y la regla de 24 h; la transición la valida citasData.
+// usuarioId lo entrega la página en EP2; en EP3 lo toma el microservicio desde el JWT.
 export async function cambiarEstado(id, nuevoEstado, usuarioId) {
-  const cita = citasData.cambiarEstado(id, nuevoEstado, usuarioId);
+  const actual = exigirCita(id);
+  const actor = exigirActor(usuarioId);
+  exigirCitaPropia(actor, actual);
+  if (!(ACCIONES_POR_ROL[actor.rol] ?? []).includes(nuevoEstado)) {
+    throw errorProhibido("Tu rol no puede hacer ese cambio en la cita.");
+  }
+  if (
+    actor.rol === "PACIENTE" &&
+    citasUtils.puedeTransicionar(actual.estado, nuevoEstado) &&
+    !citasUtils.puedeCancelar(actual, new Date())
+  ) {
+    throw errorConflicto(MENSAJE_24H);
+  }
+
+  // RN-08: al cancelar, el pago de la cita pasa a REEMBOLSADO. Esta función no tiene ningún
+  // await: leer, validar, cambiar el estado y reembolsar ocurren en un solo paso.
+  const cita = citasData.cambiarEstado(id, nuevoEstado, actor.id);
   if (nuevoEstado === "CANCELADA" && cita.pagoId && pagosData.obtener(cita.pagoId)) {
     pagosData.actualizar(cita.pagoId, { estado: "REEMBOLSADO" });
   }
@@ -87,15 +160,22 @@ export async function cambiarEstado(id, nuevoEstado, usuarioId) {
 }
 
 // RN-05 y RN-10 a RN-13: la nueva hora debe ser una que el asistente ofrecería.
-// Si la cita no existe o ya terminó, no se revisa la agenda: citasData.reprogramar
-// lanza el error que corresponde ("no existe" o "Solo se puede reprogramar...").
-// usuarioId es un cuarto parámetro opcional: no cambia el contrato y alimenta el historial.
+// Si la cita ya terminó, no se revisa la agenda: citasData.reprogramar lanza
+// "Solo se puede reprogramar...". usuarioId alimenta el historial y los permisos.
+// RN-06: el paciente solo reprograma con más de 24 h. El nutricionista no reprograma (RN-26).
 export async function reprogramarCita(id, fecha, hora, usuarioId) {
-  const cita = citasData.obtener(id);
-  if (cita && citasUtils.ESTADOS_QUE_OCUPAN.includes(cita.estado)) {
+  const cita = exigirCita(id);
+  const actor = exigirActor(usuarioId, ["PACIENTE", "SECRETARIA", "ADMIN"]);
+  exigirCitaPropia(actor, cita);
+  if (actor.rol === "PACIENTE" && citasUtils.ESTADOS_QUE_OCUPAN.includes(cita.estado)) {
+    if (!citasUtils.puedeCancelar(cita, new Date())) throw errorConflicto(MENSAJE_24H);
+  }
+  if (citasUtils.ESTADOS_QUE_OCUPAN.includes(cita.estado)) {
     await exigirHoraDisponible({ ...cita, fecha, hora }, id);
   }
-  return citasData.reprogramar(id, fecha, hora, usuarioId);
+  // Después del await, citasData.reprogramar vuelve a revisar en un solo paso el estado
+  // (RN-05) y el choque de horario (RN-10) antes de escribir.
+  return citasData.reprogramar(id, fecha, hora, actor.id);
 }
 
 // RN-10 a RN-12: horas libres del nutricionista ese día, sin choques ni horas pasadas.

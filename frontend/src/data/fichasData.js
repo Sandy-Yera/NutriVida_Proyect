@@ -1,6 +1,7 @@
 import { guardar, leer } from "./almacen.js";
 import { fichasSemilla, medicionesSemilla, planesSemilla } from "./semillas/fichas.js";
 import { pacientesDeNutricionista, validarMedicion } from "../utils/clinica.js";
+import { errorConflicto, errorNoEncontrado, errorValidacion } from "../utils/errores.js";
 
 const CLAVE = "nv_fichas";
 
@@ -28,7 +29,7 @@ function numeroOpcional(valor) {
 
 function fichaExistente(fichas, pacienteId) {
   const ficha = fichas.find((f) => f.id === pacienteId);
-  if (!ficha) throw new Error("El paciente no tiene ficha: créala antes de continuar.");
+  if (!ficha) throw errorNoEncontrado("El paciente no tiene ficha: créala antes de continuar.");
   return ficha;
 }
 
@@ -44,10 +45,10 @@ export function obtenerFicha(pacienteId) {
 export function crearFicha(datos) {
   const todo = leerTodo();
   if (!datos.id || !datos.nutricionistaId) {
-    throw new Error("La ficha necesita el paciente y el nutricionista a cargo.");
+    throw errorValidacion("La ficha necesita el paciente y el nutricionista a cargo.");
   }
   if (todo.fichas.some((f) => f.id === datos.id)) {
-    throw new Error("Este paciente ya tiene ficha.");
+    throw errorConflicto("Este paciente ya tiene ficha.");
   }
   const ficha = {
     id: datos.id,
@@ -71,9 +72,7 @@ export function registrarMedicion(pacienteId, datos) {
   const ficha = fichaExistente(todo.fichas, pacienteId);
   const errores = validarMedicion(datos);
   if (Object.keys(errores).length > 0) {
-    const error = new Error("La medición tiene datos fuera de rango.");
-    error.errores = errores;
-    throw error;
+    throw errorValidacion("La medición tiene datos fuera de rango.", { errores });
   }
   const medicion = {
     id: siguienteId(todo.mediciones, "M", 4),
