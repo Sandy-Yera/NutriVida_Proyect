@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Reglas de negocio de las citas: el puerto a Java de frontend/src/utils/citas.js (EP2), con los
@@ -165,22 +166,19 @@ public final class ReglasCita {
     /**
      * Agenda rápida del Inicio (decisión 3): las próximas horas libres de toda la clínica desde
      * ahora, para una consulta de 30 min. Recorre día por día (hasta diasMaximos) y ordena por
-     * fecha, hora y nutricionista, igual que buscarProximasHorasLibres de EP2.
+     * fecha, hora y nutricionista, igual que buscarProximasHorasLibres de EP2. El stream es
+     * perezoso: deja de revisar días apenas junta la cantidad pedida.
      */
     public static List<HoraLibre> buscarProximasHorasLibres(Collection<HorarioNutricionista> nutricionistas,
             Collection<Cita> citas, LocalDateTime ahora, int cantidad, int diasMaximos) {
-        List<HoraLibre> encontradas = new ArrayList<>();
-        LocalDate fecha = ahora.toLocalDate();
-        for (int dia = 0; dia < diasMaximos && encontradas.size() < cantidad; dia++) {
-            LocalDate delDia = fecha;
-            nutricionistas.stream()
-                    .flatMap(n -> horariosDisponibles(n, delDia, citas, DURACION_BLOQUE, ahora).stream()
-                            .map(hora -> new HoraLibre(n.id(), delDia, hora)))
-                    .sorted(Comparator.comparing(HoraLibre::hora).thenComparing(HoraLibre::nutricionistaId))
-                    .forEach(encontradas::add);
-            fecha = fecha.plusDays(1);
-        }
-        return List.copyOf(encontradas.subList(0, Math.min(encontradas.size(), Math.max(0, cantidad))));
+        return Stream.iterate(ahora.toLocalDate(), dia -> dia.plusDays(1))
+                .limit(Math.max(0, diasMaximos))
+                .flatMap(dia -> nutricionistas.stream()
+                        .flatMap(n -> horariosDisponibles(n, dia, citas, DURACION_BLOQUE, ahora).stream()
+                                .map(hora -> new HoraLibre(n.id(), dia, hora)))
+                        .sorted(Comparator.comparing(HoraLibre::hora).thenComparing(HoraLibre::nutricionistaId)))
+                .limit(Math.max(0, cantidad))
+                .toList();
     }
 
     // ------------------------------------------------------------------ tiempos

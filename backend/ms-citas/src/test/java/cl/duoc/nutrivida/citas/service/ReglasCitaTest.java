@@ -8,6 +8,7 @@ import static cl.duoc.nutrivida.citas.model.EstadoCita.PENDIENTE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import cl.duoc.nutrivida.citas.dto.Estadisticas;
+import cl.duoc.nutrivida.citas.dto.HoraLibre;
 import cl.duoc.nutrivida.citas.dto.HorarioNutricionista;
 import cl.duoc.nutrivida.citas.model.Cita;
 import cl.duoc.nutrivida.citas.model.EstadoCita;
@@ -548,6 +549,75 @@ class ReglasCitaTest {
             assertThat(ReglasCita.rolPuedeCambiarA("ADMIN", ATENDIDA)).isTrue();
             assertThat(ReglasCita.rolPuedeCambiarA("INVITADO", CANCELADA)).isFalse();
             assertThat(ReglasCita.rolPuedeCambiarA(null, CANCELADA)).isFalse();
+        }
+    }
+
+    // Espejo de describe("buscarProximasHorasLibres") de utils/citas.test.js (decisión 3).
+    @Nested
+    @DisplayName("buscarProximasHorasLibres (agenda rápida del Inicio)")
+    class BuscarProximasHorasLibres {
+        final HorarioNutricionista felipe = new HorarioNutricionista("NUT004", List.of(2, 3, 4, 5), t("14:00"), t("19:00"));
+        final List<HorarioNutricionista> todos = List.of(CAROLINA, RODRIGO, DANIELA, felipe);
+        final LocalDateTime lunes7am = LocalDateTime.of(2026, 10, 12, 7, 0);
+        final LocalDate martes = LUNES.plusDays(1);
+
+        List<HoraLibre> buscar(List<Cita> citas, LocalDateTime ahora, int cantidad) {
+            return ReglasCita.buscarProximasHorasLibres(todos, citas, ahora, cantidad, 14);
+        }
+
+        @Test
+        @DisplayName("un lunes a las 7:00 empieza Daniela a las 08:00, en orden de hora")
+        void primerasHorasEnOrden() {
+            assertThat(buscar(List.of(), lunes7am, 3)).containsExactly(
+                    new HoraLibre("NUT003", LUNES, t("08:00")),
+                    new HoraLibre("NUT003", LUNES, t("08:30")),
+                    new HoraLibre("NUT001", LUNES, t("09:00")));
+        }
+
+        @Test
+        @DisplayName("no ofrece horas ocupadas ni pasadas; a la misma hora ordena por nutricionista")
+        void sinOcupadasNiPasadas() {
+            List<Cita> citas = List.of(cita("C1", "NUT003", LUNES, "09:00", 30, CONFIRMADA));
+
+            assertThat(buscar(citas, LocalDateTime.of(2026, 10, 12, 8, 40), 3)).containsExactly(
+                    new HoraLibre("NUT001", LUNES, t("09:00")),
+                    new HoraLibre("NUT001", LUNES, t("09:30")),
+                    new HoraLibre("NUT003", LUNES, t("09:30")));
+        }
+
+        @Test
+        @DisplayName("si hoy ya no quedan horas, sigue con el día siguiente")
+        void sigueAlDiaSiguiente() {
+            assertThat(buscar(List.of(), LocalDateTime.of(2026, 10, 12, 18, 0), 1))
+                    .containsExactly(new HoraLibre("NUT003", martes, t("08:00")));
+        }
+
+        @Test
+        @DisplayName("junta horas de varios días cuando un día no alcanza")
+        void juntaVariosDias() {
+            // A las 16:10 a Carolina le queda solo 16:30.
+            assertThat(buscar(List.of(), LocalDateTime.of(2026, 10, 12, 16, 10), 2)).containsExactly(
+                    new HoraLibre("NUT001", LUNES, t("16:30")),
+                    new HoraLibre("NUT003", martes, t("08:00")));
+        }
+
+        @Test
+        @DisplayName("lista vacía con cantidad 0 o negativa, o sin nutricionistas")
+        void vacia() {
+            assertThat(buscar(List.of(), lunes7am, 0)).isEmpty();
+            assertThat(buscar(List.of(), lunes7am, -1)).isEmpty();
+            assertThat(ReglasCita.buscarProximasHorasLibres(List.of(), List.of(), lunes7am, 4, 14)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("no revisa más días que diasMaximos")
+        void topeDeDias() {
+            LocalDateTime lunesNoche = LocalDateTime.of(2026, 10, 12, 18, 0);
+
+            assertThat(ReglasCita.buscarProximasHorasLibres(todos, List.of(), lunesNoche, 1, 1)).isEmpty();
+            assertThat(ReglasCita.buscarProximasHorasLibres(todos, List.of(), lunesNoche, 1, 2))
+                    .containsExactly(new HoraLibre("NUT003", martes, t("08:00")));
+            assertThat(ReglasCita.buscarProximasHorasLibres(todos, List.of(), lunesNoche, 1, -1)).isEmpty();
         }
     }
 }
