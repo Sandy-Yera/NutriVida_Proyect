@@ -1,0 +1,5 @@
+# Scripts que se ejecutan en Linux (contenedor de MySQL, mvnw): siempre con fin de línea LF,
+# aunque se clone en Windows. Con CRLF, bash falla con "bad interpreter".
+*.sh  text eol=lf
+mvnw  text eol=lf
+*.cmd text eol=crlf

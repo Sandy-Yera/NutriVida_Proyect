@@ -1,0 +1,8 @@
+# Lo que no entra a la imagen: compilados locales, configuración del IDE y el wrapper.
+target/
+.idea/
+*.iml
+.vscode/
+.mvn/
+mvnw
+mvnw.cmd

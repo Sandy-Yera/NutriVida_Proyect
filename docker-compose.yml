@@ -1,0 +1,96 @@
+# NutriVida completo en Docker: MySQL 8 + 3 microservicios + frontend con Nginx (proxy de /api).
+# Funciona igual en Windows, macOS y Linux. Solo requiere Docker (Docker Desktop en Windows/macOS).
+#
+#   copy .env.example .env               (cp en Linux/macOS) y definir JWT_SECRET
+#   docker compose up -d --build         primera vez o después de cambiar código
+#   docker compose up -d                 siguientes veces
+#   docker compose logs -f ms-citas      ver el log de un servicio
+#   docker compose down                  detiene todo (los datos quedan en el volumen)
+#   docker compose down -v               detiene y BORRA los datos (vuelve a correr database/*.sql)
+#
+# Solo la base, para programar desde el IDE:  docker compose up -d mysql
+#
+# Abrir:  http://localhost:8080 (app)  ·  Swagger: http://localhost:8081|8082|8083/swagger-ui.html
+name: nutrivida
+
+# Variables comunes de los 3 microservicios.
+x-microservicio: &microservicio
+  restart: on-failure
+  depends_on:
+    mysql:
+      condition: service_healthy
+  environment: &entorno
+    SPRING_PROFILES_ACTIVE: mysql
+    DB_HOST: mysql          # nombre del servicio en la red de Docker, no "localhost"
+    DB_PORT: "3306"         # puerto dentro de la red de Docker
+    DB_USER: ${DB_USER:-nutrivida}
+    DB_PASSWORD: ${DB_PASSWORD:-nutrivida_dev}
+    JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el archivo .env (copia .env.example)}
+    TZ: America/Santiago
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev}
+      MYSQL_USER: ${DB_USER:-nutrivida}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-nutrivida_dev}
+      TZ: America/Santiago
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${DB_PORT:-3306}:3306"   # para phpMyAdmin/Workbench o para correr un microservicio desde el IDE
+    volumes:
+      - mysql-datos:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d:ro   # 00_esquemas.sh, 01_usuarios.sql, 02_citas.sql, 03_clinica.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root_dev}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  ms-usuarios:
+    <<: *microservicio
+    build: ./backend/ms-usuarios
+    image: nutrivida/ms-usuarios:dev
+    ports:
+      - "8081:8081"
+
+  ms-citas:
+    <<: *microservicio
+    build: ./backend/ms-citas
+    image: nutrivida/ms-citas:dev
+    environment:
+      <<: *entorno
+      # ms-citas pide a ms-clinica el horario del nutricionista y la duración del servicio.
+      NUTRIVIDA_CLINICA_URL: http://ms-clinica:8083
+    ports:
+      - "8082:8082"
+
+  ms-clinica:
+    <<: *microservicio
+    build: ./backend/ms-clinica
+    image: nutrivida/ms-clinica:dev
+    ports:
+      - "8083:8083"
+
+  # Frontend compilado + proxy: el navegador solo habla con este contenedor, que reparte /api/...
+  # al microservicio dueño de cada ruta (mismas reglas que vite.config.js). Sin CORS.
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_MODE: ${VITE_API_MODE:-api}
+    image: nutrivida/frontend:dev
+    restart: unless-stopped
+    depends_on:
+      - ms-usuarios
+      - ms-citas
+      - ms-clinica
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  mysql-datos:

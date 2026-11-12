@@ -21,21 +21,26 @@ describe("errores (contrato de errores para EP3)", () => {
     expect(errorDeCampo("rut", "RUT inválido")).toBeInstanceOf(Error);
   });
 
-  it("aCuerpo arma el JSON del @RestControllerAdvice, también para un solo campo", () => {
-    expect(errorDeCampo("rut", "RUT inválido").aCuerpo()).toEqual({
-      estado: 400,
-      codigo: "VALIDACION",
+  it("aCuerpo arma el mismo JSON que el GlobalExceptionHandler, también para un solo campo", () => {
+    expect(errorDeCampo("rut", "RUT inválido").aCuerpo("/api/usuarios")).toEqual({
+      timestamp: expect.any(String),
+      status: 400,
+      error: "Bad Request",
       mensaje: "RUT inválido",
+      ruta: "/api/usuarios",
       errores: { rut: "RUT inválido" },
     });
+    expect(errorNoEncontrado("No existe.").aCuerpo()).not.toHaveProperty("errores");
   });
 
   it("desdeRespuesta reconstruye el error que la UI ya sabe mostrar", () => {
     const deUnCampo = desdeRespuesta(
       {
-        codigo: "CONFLICTO",
+        status: 409,
+        error: "Conflict",
         mensaje: "Ya existe un usuario con ese correo.",
-        errores: { correo: "x" },
+        ruta: "/api/usuarios",
+        errores: { correo: "Ya existe un usuario con ese correo." },
       },
       409,
     );
@@ -45,5 +50,20 @@ describe("errores (contrato de errores para EP3)", () => {
     const sinCuerpo = desdeRespuesta(null, 404);
     expect(sinCuerpo).toMatchObject({ estado: 404, codigo: "NO_ENCONTRADO" });
     expect(sinCuerpo.campo).toBeUndefined();
+  });
+
+  it("402 del pago rechazado y códigos desconocidos conservan su número", () => {
+    expect(
+      desdeRespuesta({ status: 402, mensaje: "El banco rechazó la tarjeta." }, 402),
+    ).toMatchObject({
+      estado: 402,
+      codigo: "PAGO_RECHAZADO",
+      message: "El banco rechazó la tarjeta.",
+    });
+    expect(desdeRespuesta({ mensaje: "x" }, 422)).toMatchObject({
+      estado: 422,
+      codigo: "VALIDACION",
+    });
+    expect(desdeRespuesta(null, 502)).toMatchObject({ estado: 502, codigo: "ERROR_SERVIDOR" });
   });
 });

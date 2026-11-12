@@ -1,18 +1,38 @@
-// Contrato de errores común a los 5 services (preparación EP3).
-// Cada error lleva el código HTTP que devolverá el microservicio de Spring Boot y la misma
-// forma del cuerpo de error que se acordó para el @RestControllerAdvice:
-//   { estado: 409, codigo: "CONFLICTO", mensaje: "...", errores: { campo: "mensaje" } }
-// Así, cuando los services llamen a la API, la UI no cambia: sigue leyendo error.message,
-// error.campo (formularios de un campo) y error.errores (formularios de varios campos).
+// Contrato de errores común a los services y a los 3 microservicios (EP3).
+// Cuerpo JSON que devuelve el GlobalExceptionHandler de cada microservicio
+// (detalle en documentacion/ep3/contrato-backend.md):
+//   { timestamp, status: 409, error: "Conflict", mensaje: "...", ruta: "/api/citas",
+//     errores: { campo: "mensaje" } }   <- "errores" solo si hay campos con error
+// En el frontend ese cuerpo se convierte en un ErrorApi, así la UI no cambia entre el modo
+// local y el modo API: sigue leyendo error.message, error.campo y error.errores.
 
 export const CODIGOS = {
   VALIDACION: 400,
   NO_AUTENTICADO: 401,
+  PAGO_RECHAZADO: 402,
   PROHIBIDO: 403,
   NO_ENCONTRADO: 404,
+  NO_PERMITIDO: 405,
   CONFLICTO: 409,
   MUY_GRANDE: 413,
   TIPO_NO_SOPORTADO: 415,
+  ERROR_SERVIDOR: 500,
+  SIN_CONEXION: 503,
+};
+
+// Nombre estándar del código HTTP: el campo "error" del cuerpo.
+const FRASE_HTTP = {
+  400: "Bad Request",
+  401: "Unauthorized",
+  402: "Payment Required",
+  403: "Forbidden",
+  404: "Not Found",
+  405: "Method Not Allowed",
+  409: "Conflict",
+  413: "Payload Too Large",
+  415: "Unsupported Media Type",
+  500: "Internal Server Error",
+  503: "Service Unavailable",
 };
 
 export class ErrorApi extends Error {
@@ -25,14 +45,17 @@ export class ErrorApi extends Error {
     if (errores) this.errores = errores;
   }
 
-  // Cuerpo JSON equivalente al que devolverá el backend. Un error de un solo campo
-  // viaja igual que uno de varios: dentro de "errores".
-  aCuerpo() {
+  // Cuerpo JSON equivalente al que devuelve el backend. Un error de un solo campo viaja igual
+  // que uno de varios: dentro de "errores". Sin campos con error, "errores" no se envía.
+  aCuerpo(ruta = "") {
+    const errores = this.errores ?? (this.campo ? { [this.campo]: this.message } : null);
     return {
-      estado: this.estado,
-      codigo: this.codigo,
+      timestamp: new Date().toISOString(),
+      status: this.estado,
+      error: FRASE_HTTP[this.estado] ?? "Error",
       mensaje: this.message,
-      errores: this.errores ?? (this.campo ? { [this.campo]: this.message } : {}),
+      ruta,
+      ...(errores ? { errores } : {}),
     };
   }
 }
@@ -54,16 +77,31 @@ export const errorNoEncontrado = (mensaje) => new ErrorApi(mensaje, { codigo: "N
 export const errorConflicto = (mensaje, opciones) =>
   new ErrorApi(mensaje, { ...opciones, codigo: "CONFLICTO" });
 
-// Reconstruye un ErrorApi desde el cuerpo que devuelve el backend (para el cliente HTTP de EP3).
+// Reconstruye un ErrorApi desde la respuesta del backend (lo usa services/http.js).
+// "estadoHttp" manda sobre cuerpo.status: si un proxy responde sin JSON, igual sabemos el código.
 export function desdeRespuesta(cuerpo, estadoHttp) {
+  const estado = estadoHttp ?? cuerpo?.status ?? 500;
   const codigo =
-    cuerpo?.codigo ?? Object.keys(CODIGOS).find((c) => CODIGOS[c] === estadoHttp) ?? "VALIDACION";
+    Object.keys(CODIGOS).find((c) => CODIGOS[c] === estado) ??
+    (estado >= 500 ? "ERROR_SERVIDOR" : "VALIDACION");
   const errores =
     cuerpo?.errores && Object.keys(cuerpo.errores).length ? cuerpo.errores : undefined;
   const campos = errores ? Object.keys(errores) : [];
-  return new ErrorApi(cuerpo?.mensaje ?? "Ocurrió un error inesperado.", {
-    codigo,
-    errores,
-    campo: campos.length === 1 ? campos[0] : undefined,
-  });
+  const error = new ErrorApi(
+    cuerpo?.mensaje ?? "Ocurrió un error inesperado. Intenta nuevamente.",
+    {
+      codigo,
+      errores,
+      campo: campos.length === 1 ? campos[0] : undefined,
+    },
+  );
+  // Un código que no está en la tabla (por ejemplo 422) conserva su número real.
+  error.estado = estado;
+  return error;
 }
+
+// Sin respuesta del servidor (apagado, sin red o bloqueado por CORS).
+export const errorSinConexion = () =>
+  new ErrorApi("No fue posible conectar con el servidor. Revisa que el backend esté encendido.", {
+    codigo: "SIN_CONEXION",
+  });

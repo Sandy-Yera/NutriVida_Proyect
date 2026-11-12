@@ -4,6 +4,8 @@ Rama: `ep3/services-foto`. Autor de los cambios: Simon. Base: tag `ep2-entrega`.
 
 El objetivo es que, al pasar a los microservicios, **solo cambie el interior de los services** (de `data/` a `fetch`). Las páginas y los componentes no deberían cambiar. Para eso, en esta rama los services ya se comportan como lo harán los endpoints: validan, revisan permisos y lanzan errores con el código HTTP que devolverá cada microservicio.
 
+> **Actualización del 12-11-2026.** El contrato definitivo del backend está en [`ep3/contrato-backend.md`](ep3/contrato-backend.md). Reemplaza a este documento en dos puntos: el **formato de error** (ahora `timestamp`, `status`, `error`, `mensaje`, `ruta` y `errores`) y las **rutas de los endpoints** (ahora siguen el plan semestral, por ejemplo `/api/disponibilidad`, `/api/citas/mias`, `PATCH /api/citas/{id}/reprogramar` y `/api/pacientes`). También cambia el flujo del pago: ahora se hace en un solo endpoint, `POST /api/citas`. Las secciones 1 y 2 de este documento quedan como registro de la preparación de EP2.
+
 ## 1. Contrato común de los services
 
 | Regla                      | Detalle                                                                                                                                                                                                                                          |
