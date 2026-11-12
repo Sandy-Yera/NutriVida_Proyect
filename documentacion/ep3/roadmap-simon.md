@@ -29,7 +29,7 @@
 | G-30 | Base común: 3 microservicios (estructura DoggySpa), error común, JWT, Swagger, CORS, perfil `dev` con token de prueba; `http.js`, proxy de Vite | 12/11 | **Hecho** (commit `9634f5b`) |
 | R1 | Proyecto ms-citas en 8082 | 12–13/11 | **Hecho**: arranca con H2 en el PC de Simon |
 | R2 | Docker: compose con MySQL 8, Dockerfiles multi-etapa, Nginx | 13/11 | **Hecho** (12/11): los 5 servicios levantan; lo comprueba `scripts\verificar.ps1` |
-| R4 | Formato de error: `GlobalExceptionHandler` + 401/403 por el mismo JSON | 15/11 | **Hecho en la base** (faltan pruebas) |
+| R4 | Formato de error: `GlobalExceptionHandler` + 401/403 por el mismo JSON | 15/11 | **Hecho** (12/11): `FormatoErrorTest`, 12 pruebas MockMvc con la seguridad real: 400, 401 (sin token, vencido, inválido, desactivado), 403, 404, 405, 409, 500 y 503 |
 | R3 | Modelo y BD (S-30): `EstadoCita`, `Cita`, `HistorialCita`, `Pago`, `Recordatorio`; `database/02_citas.sql` con semillas; `UNIQUE(pago_id)` | 13–15/11 | **Hecho** (12/11): 7 entidades, 4 repositorios, 8 pruebas JUnit; `validate` pasa en MySQL |
 | R5 | Reglas en Java (puerto de `utils/citas.js`): transiciones, 24 h, bloques, choques, 60 días, teleconsulta | 16–17/11 | **Hecho** (12/11): `ReglasCita` y `ReglasPago`, 45 pruebas JUnit espejo de las de EP2 (53 en total en ms-citas) |
 | R6 | Cliente de ms-clinica (`NUTRIVIDA_CLINICA_URL`) para horario y duración, con simulado | 17/11 | **Hecho** (12/11): HTTP + semillas de respaldo, 21 pruebas JUnit (74 en total). Falta probarlo contra los endpoints reales de Catalina (C-31): `verificar.ps1` revisa su formato apenas existan |
@@ -101,6 +101,15 @@
 - **Tiempo máximo de 3 s.** Si ms-clinica se cuelga, la reserva no se cuelga con él. Hay una prueba con un servidor que tarda 1,5 s y un límite de 300 ms.
 - **Token.** Hoy el catálogo es público (contrato §3), pero ms-citas reenvía el token del usuario por si el equipo decide exigirlo (pendiente 1).
 - **Pruebas.** `ClinicaHttpTest` levanta un ms-clinica falso, un servidor HTTP real del JDK, y prueba lo que viaja por la red: JSON con campos de más, 404, 500, servicio apagado, tiempo agotado, 401, JSON que no calza y reenvío del token. `verificar.ps1` muestra con qué modo arrancó ms-citas y, apenas existan los endpoints de Catalina, revisa que traigan los campos que ms-citas usa.
+
+### R4 · Formato de error común
+
+- **Un solo lugar arma el JSON**, `GlobalExceptionHandler`. Los services lanzan `ApiException` con su código, y ningún controlador arma errores a mano.
+- **Los 401 y 403 nacen antes del controlador**, en los filtros de Spring Security, donde `@RestControllerAdvice` no llega. `ManejadorErroresSeguridad` se los reenvía para que salgan con el mismo formato. El 503 de ms-usuarios también nace en el filtro (`JwtFiltro`) y sigue el mismo camino.
+- **Qué prueba `FormatoErrorTest`.** Cada código del contrato §2.3 trae `timestamp` ISO, `status`, `error`, `mensaje` y `ruta`, y `errores` solo cuando hay campos. Corre con la seguridad real: `MockMvc` sobre el contexto completo con `springSecurity()`, no con la seguridad desactivada.
+  - El **401** tiene tres mensajes distintos: sin token, token vencido (firmado con el mismo secreto, 9 h atrás) y firma inválida. Más un cuarto: cuenta desactivada con el token aún vigente.
+  - El **500** no muestra el detalle técnico. La prueba fuerza un `IllegalStateException` y revisa que el mensaje sea el genérico.
+- ms-usuarios y ms-clinica son mocks en esta prueba (`@MockitoBean`, `@MockitoSpyBean`). Así se fuerzan el 503 y el 500 sin apagar servicios.
 
 ### R7 · API de ms-citas
 
