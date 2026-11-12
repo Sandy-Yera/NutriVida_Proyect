@@ -59,10 +59,18 @@ function EsErrorComun([string]$cuerpo, [int]$status) {
     return $cuerpo -match ('"status"\s*:\s*' + $status)
 }
 
-function MysqlCitas([string]$sql) {
-    # La clave de root la toma el contenedor de su propia variable: no se lee el .env.
-    $cmd = 'mysql -N -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 -e "' + $sql + '" 2>/dev/null'
-    return (& docker compose exec -T mysql sh -c $cmd 2>$null | Out-String).Trim()
+# Ejecuta mysql como root dentro del contenedor. La clave la toma el contenedor de su propia
+# variable (MYSQL_PWD), así no se lee el .env. Sin comillas dobles: PowerShell 5.1 las borra al
+# pasar argumentos a un programa externo, y el comando llegaría roto a sh.
+function MysqlRoot([string]$argumentos) {
+    $cmd = "MYSQL_PWD=`$MYSQL_ROOT_PASSWORD mysql -uroot --default-character-set=utf8mb4 $argumentos"
+    $salida = & docker compose exec -T mysql sh -c $cmd 2>&1
+    return @{ Codigo = $LASTEXITCODE; Salida = ($salida | Out-String).Trim() }
+}
+
+# $sql no puede llevar comillas simples (va entre comillas simples para sh).
+function ConsultaCitas([string]$sql) {
+    return (MysqlRoot "-N -e '$sql'").Salida
 }
 
 Push-Location $raiz
@@ -136,24 +144,26 @@ try {
 
         $script = Join-Path $raiz 'database\02_citas.sql'
         $hayScript = Test-Path $script
+        # ms-citas se detiene mientras se recrea su esquema y vuelve a arrancar después: así
+        # Hibernate valida las entidades contra las tablas recién creadas, y no queda ningún
+        # mensaje "Started" de la ejecución anterior que confunda la espera.
+        & docker compose stop ms-citas 2>&1 | Out-Null
         if ($hayScript -and -not $SinRecargarCitas) {
             # Solo el esquema de ms-citas: los permisos sobre nutrivida_citas.* sobreviven al DROP.
-            $null = MysqlCitas 'DROP DATABASE IF EXISTS nutrivida_citas; CREATE DATABASE nutrivida_citas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+            $r1 = MysqlRoot "-e 'DROP DATABASE IF EXISTS nutrivida_citas; CREATE DATABASE nutrivida_citas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
             & docker compose cp $script mysql:/tmp/02_citas.sql 2>&1 | Out-Null
-            $salidaSql = & docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 < /tmp/02_citas.sql' 2>&1 |
-                Where-Object { "$_" -notmatch 'Using a password' } | Out-String
-            Anotar 'Carga de 02_citas.sql' ($LASTEXITCODE -eq 0) $(if ($LASTEXITCODE -eq 0) { 'esquema nutrivida_citas recreado' } else { $salidaSql.Trim() })
+            $r2 = MysqlRoot '< /tmp/02_citas.sql'
+            $ok = ($r1.Codigo -eq 0) -and ($r2.Codigo -eq 0)
+            Anotar 'Carga de 02_citas.sql' $ok $(if ($ok) { 'esquema nutrivida_citas recreado' } else { ($r1.Salida + ' ' + $r2.Salida).Trim() })
         }
 
-        # ms-citas se reinicia para que Hibernate valide las entidades contra las tablas recién creadas.
-        $desde = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-        & docker compose restart ms-citas 2>&1 | Out-Null
+        & docker compose start ms-citas 2>&1 | Out-Null
         $arranco = $false; $fallo = $false
         for ($i = 0; $i -lt 60 -and -not $arranco -and -not $fallo; $i++) {
             Start-Sleep -Seconds 2
-            $logMs = & docker compose logs --since $desde ms-citas 2>&1 | Out-String
-            $arranco = $logMs -match 'Started MsCitasApplication'
-            $fallo = $logMs -match 'APPLICATION FAILED TO START|Schema-validation|Error creating bean'
+            $arranco = (Pedir 'http://localhost:8082/v3/api-docs').Status -eq 200
+            $logMs = & docker compose logs --tail 300 ms-citas 2>&1 | Out-String
+            $fallo = $logMs -match 'APPLICATION FAILED TO START|Schema-validation'
         }
         if ($arranco) {
             Anotar 'ms-citas arranca (validate)' $true 'entidades y tablas calzan'
@@ -184,8 +194,8 @@ try {
         Anotar 'Proxy ruta inexistente' (($r.Status -eq 404) -and (EsErrorComun $r.Cuerpo 404)) "HTTP $($r.Status)"
 
         if ($hayScript) {
-            $citas = MysqlCitas 'SELECT COUNT(*) FROM nutrivida_citas.cita'
-            $pagos = MysqlCitas 'SELECT COUNT(*) FROM nutrivida_citas.pago'
+            $citas = ConsultaCitas 'SELECT COUNT(*) FROM nutrivida_citas.cita'
+            $pagos = ConsultaCitas 'SELECT COUNT(*) FROM nutrivida_citas.pago'
             Anotar 'Semillas de citas' (($citas -match '^\d+$') -and [int]$citas -gt 0) "citas: $citas, pagos: $pagos"
         }
     }
