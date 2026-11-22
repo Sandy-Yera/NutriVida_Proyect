@@ -11,6 +11,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,15 +77,17 @@ class CatalogoTest {
     }
 
     @Test
-    @DisplayName("soloActivos=false: 401 sin token, 403 para un paciente, 200 para el admin")
-    void inactivosSoloAdmin() throws Exception {
-        mvc.perform(get("/api/servicios").param("soloActivos", "false")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/servicios").param("soloActivos", "false").header("Authorization", paciente(jwt, "U100")))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.mensaje").value("Solo el administrador ve los servicios desactivados."));
-        mvc.perform(get("/api/servicios").param("soloActivos", "false").header("Authorization", admin(jwt)))
+    @DisplayName("soloActivos=false también es público: las citas antiguas muestran servicios desactivados")
+    void inactivosPublicos() throws Exception {
+        mvc.perform(patch("/api/servicios/TG002/estado").header("Authorization", admin(jwt))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"activo\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/servicios")).andExpect(jsonPath("$", hasSize(17)));
+        mvc.perform(get("/api/servicios").param("soloActivos", "false"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(18)));
+        mvc.perform(get("/api/servicios").param("soloActivos", "false").header("Authorization", paciente(jwt, "U100")))
+                .andExpect(status().isOk());
     }
 
     @Test

@@ -38,9 +38,9 @@ public class ServicioController {
     }
 
     @Operation(summary = "Listar servicios (público)",
-            description = "Lista completa, sin paginar (la usa ms-citas). Con soloActivos=false también los desactivados: solo ADMIN.")
+            description = "Lista completa, sin paginar (la usa ms-citas). Con soloActivos=false también los desactivados "
+                    + "(las citas antiguas muestran su nombre).")
     @ApiResponse(responseCode = "200", description = "Servicios en el orden del catálogo")
-    @ApiResponse(responseCode = "403", description = "soloActivos=false sin ser ADMIN")
     @GetMapping
     public List<ServicioRespuesta> listar(
             @Parameter(example = "CONSULTA") @RequestParam(required = false) String tipo,

@@ -24,7 +24,7 @@ Para correrlo desde el IDE con MySQL: `docker compose up -d mysql` en la raíz y
 
 | Método y ruta | Quién | Respuestas |
 | --- | --- | --- |
-| `GET /api/servicios?tipo&texto&soloActivos` | Público (`soloActivos=false`: ADMIN) | 200 · 403 |
+| `GET /api/servicios?tipo&texto&soloActivos` | Público | 200 |
 | `GET /api/servicios/{codigo}` | Público | 200 · 404 |
 | `POST /api/servicios` | ADMIN | 201 · 400 · 409 |
 | `PATCH /api/servicios/{codigo}` | ADMIN | 200 · 400 · 404 |

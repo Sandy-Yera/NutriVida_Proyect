@@ -133,13 +133,12 @@ class ApiClinicaTest {
     }
 
     @Test
-    @DisplayName("Desactivar: sale del catálogo público y el admin lo sigue viendo")
+    @DisplayName("Desactivar: sale del catálogo público")
     void desactivaServicio() throws Exception {
         con(admin(jwt), json(patch("/api/servicios/TG002/estado"), "{\"activo\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo").value(false));
         mvc.perform(get("/api/servicios")).andExpect(jsonPath("$", hasSize(17)));
-        con(admin(jwt), get("/api/servicios").param("soloActivos", "false")).andExpect(jsonPath("$", hasSize(18)));
         assertThat(servicios.findById("TG002").orElseThrow().getActivo()).isFalse();
         con(admin(jwt), json(patch("/api/servicios/TG002/estado"), "{}"))
                 .andExpect(status().isBadRequest())

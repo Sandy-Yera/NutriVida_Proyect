@@ -5,7 +5,6 @@ import cl.duoc.nutrivida.clinica.dto.ServicioSolicitud;
 import cl.duoc.nutrivida.clinica.exception.ApiException;
 import cl.duoc.nutrivida.clinica.model.Servicio;
 import cl.duoc.nutrivida.clinica.repository.ServicioRepository;
-import cl.duoc.nutrivida.clinica.security.UsuarioActual;
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
@@ -28,19 +27,18 @@ public class ServicioService {
             .thenComparing(Servicio::getCodigo);
 
     private final ServicioRepository servicios;
-    private final UsuarioActual usuarioActual;
 
-    public ServicioService(ServicioRepository servicios, UsuarioActual usuarioActual) {
+    public ServicioService(ServicioRepository servicios) {
         this.servicios = servicios;
-        this.usuarioActual = usuarioActual;
     }
 
-    /** Igual que filtrarServicios de EP2: por tipo y por texto en nombre o descripción, sin tildes. */
+    /**
+     * Igual que filtrarServicios de EP2: por tipo y por texto en nombre o descripción, sin tildes.
+     * soloActivos=false es público: Mis citas y las agendas muestran el nombre de servicios ya
+     * desactivados en citas antiguas, y el catálogo no tiene datos privados.
+     */
     @Transactional(readOnly = true)
     public List<ServicioRespuesta> listar(String tipo, String texto, boolean soloActivos) {
-        if (!soloActivos && !usuarioActual.obtener().tieneRol("ADMIN")) {
-            throw ApiException.prohibido("Solo el administrador ve los servicios desactivados.");
-        }
         String buscado = ReglasClinica.quitarTildes(texto);
         return servicios.findAll().stream()
                 .filter(s -> !soloActivos || Boolean.TRUE.equals(s.getActivo()))
