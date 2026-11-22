@@ -15,6 +15,7 @@ function Error({ campo, errores }) {
 export default function FormContacto({ onEnviar }) {
   const [datos, setDatos] = useState(VACIO);
   const [errores, setErrores] = useState({});
+  const [errorGeneral, setErrorGeneral] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
 
@@ -38,6 +39,7 @@ export default function FormContacto({ onEnviar }) {
 
   async function manejarEnvio(evento) {
     evento.preventDefault();
+    setErrorGeneral("");
     const nuevosErrores = validarContacto(datos);
     setErrores(nuevosErrores);
     const primerCampoConError = Object.keys(nuevosErrores)[0];
@@ -56,6 +58,10 @@ export default function FormContacto({ onEnviar }) {
       });
       setDatos(VACIO);
       setEnviado(true);
+    } catch (error) {
+      // Errores del backend (contrato EP3): por campo bajo cada input y el mensaje arriba del botón.
+      setErrores(error.errores ?? (error.campo ? { [error.campo]: error.message } : {}));
+      setErrorGeneral(error.message);
     } finally {
       setEnviando(false);
     }
@@ -129,6 +135,13 @@ export default function FormContacto({ onEnviar }) {
           <div className="form-text">{datos.mensaje.length} de 500 caracteres (mínimo 10).</div>
           <Error campo="mensaje" errores={errores} />
         </div>
+        {errorGeneral && (
+          <div className="col-12">
+            <div className="alert alert-danger py-2 mb-0" role="alert">
+              {errorGeneral}
+            </div>
+          </div>
+        )}
         {enviado && (
           <div className="col-12">
             <div className="alert alert-success py-2 mb-0" role="status">

@@ -1,6 +1,30 @@
 import * as fichasData from "../data/fichasData.js";
 import { obtenerSesion } from "../auth/auth.js";
 import { errorNoAutenticado, errorNoEncontrado, errorProhibido } from "../utils/errores.js";
+import { apiFetch, apiFetchONull, query, usarApi } from "./http.js";
+import { asegurarToken } from "./tokenPuente.js";
+
+// Modo API (EP3, C-34): las mismas firmas contra /api/pacientes de ms-clinica. Las reglas de
+// abajo las vuelve a aplicar el backend con el usuario del token (403 si la ficha es ajena).
+// asegurarToken es el plan B de G-32 (token del perfil dev); se quita al llegar el login.
+async function conToken(ruta, opciones) {
+  await asegurarToken();
+  return apiFetch(ruta, opciones);
+}
+
+async function conTokenONull(ruta) {
+  await asegurarToken();
+  return apiFetchONull(ruta);
+}
+
+const rutaPaciente = (pacienteId) => `/api/pacientes/${encodeURIComponent(pacienteId)}`;
+
+// Los inputs numéricos llegan como texto; la API recibe números o null.
+function numeroONull(valor) {
+  if (valor === undefined || valor === null || valor === "") return null;
+  const numero = Number(valor);
+  return Number.isNaN(numero) ? null : numero;
+}
 
 // Reglas de acceso a la ficha clínica (preparación EP3, ms-clinica). En EP2 se leen de la sesión;
 // en EP3 salen del JWT y pasan a @PreAuthorize. La página sigue decidiendo qué mostrar, pero
@@ -41,6 +65,7 @@ function exigirEscritura(pacienteId) {
 }
 
 export async function listarPacientes(nutricionistaId) {
+  if (usarApi()) return conToken(`/api/pacientes${query({ nutricionistaId })}`);
   const sesion = exigirSesion();
   if (sesion.rol === "NUTRICIONISTA" && sesion.nutricionistaId !== nutricionistaId) {
     throw errorProhibido("Solo puedes ver tus propios pacientes.");
@@ -52,6 +77,7 @@ export async function listarPacientes(nutricionistaId) {
 // Un nutricionista que no está a cargo solo recibe a quién pertenece la ficha (para el aviso
 // "Ficha de otro nutricionista"), nunca el objetivo ni los antecedentes.
 export async function obtenerFicha(pacienteId) {
+  if (usarApi()) return conTokenONull(rutaPaciente(pacienteId));
   const sesion = exigirSesion();
   const ficha = fichasData.obtenerFicha(pacienteId);
   if (!ficha) return null;
@@ -64,6 +90,7 @@ export async function obtenerFicha(pacienteId) {
 
 // El nutricionista crea la ficha a su propio nombre; no puede asignársela a otro.
 export async function crearFicha(datos) {
+  if (usarApi()) return conToken("/api/pacientes", { method: "POST", body: datos });
   const sesion = exigirSesion();
   if (sesion.rol !== "NUTRICIONISTA" || datos.nutricionistaId !== sesion.nutricionistaId) {
     throw errorProhibido("Solo puedes crear fichas a tu nombre.");
@@ -72,11 +99,26 @@ export async function crearFicha(datos) {
 }
 
 export async function listarMediciones(pacienteId) {
+  if (usarApi()) return conToken(`${rutaPaciente(pacienteId)}/mediciones`);
   exigirLectura(pacienteId);
   return fichasData.listarMediciones(pacienteId);
 }
 
 export async function registrarMedicion(pacienteId, datos) {
+  if (usarApi()) {
+    return conToken(`${rutaPaciente(pacienteId)}/mediciones`, {
+      method: "POST",
+      body: {
+        fecha: datos.fecha,
+        pesoKg: numeroONull(datos.pesoKg),
+        tallaCm: numeroONull(datos.tallaCm),
+        cinturaCm: numeroONull(datos.cinturaCm),
+        caderaCm: numeroONull(datos.caderaCm),
+        grasaPct: numeroONull(datos.grasaPct),
+        notas: datos.notas ?? "",
+      },
+    });
+  }
   const sesion = exigirEscritura(pacienteId);
   return fichasData.registrarMedicion(pacienteId, {
     ...datos,
@@ -84,12 +126,20 @@ export async function registrarMedicion(pacienteId, datos) {
   });
 }
 
+// Sin plan, ms-clinica responde 404 y aquí queda null, igual que en modo local.
 export async function obtenerPlan(pacienteId) {
+  if (usarApi()) return conTokenONull(`${rutaPaciente(pacienteId)}/plan`);
   exigirLectura(pacienteId);
   return fichasData.obtenerPlan(pacienteId);
 }
 
 export async function guardarPlan(pacienteId, plan) {
+  if (usarApi()) {
+    return conToken(`${rutaPaciente(pacienteId)}/plan`, {
+      method: "PUT",
+      body: { ...plan, kcalDiarias: numeroONull(plan.kcalDiarias) },
+    });
+  }
   const sesion = exigirEscritura(pacienteId);
   return fichasData.guardarPlan(pacienteId, { ...plan, nutricionistaId: sesion.nutricionistaId });
 }
