@@ -260,3 +260,60 @@ No hay cambios en archivos de Gabriel ni de Catalina. Estos archivos son de la b
 `.\scripts\verificar.ps1` (sin parámetros) da **PASA** con: 156 pruebas JUnit de ms-citas, pruebas mutantes (PIT) sin sobrevivientes nuevos, 456 pruebas de Vitest y ESLint, los 5 contenedores, el `validate` del esquema en MySQL y las peticiones de humo autenticadas: crear, 409, 402, 403, secretaria por el proxy, `POST` con `Origin` por el proxy, cancelar con reembolso y eliminar.
 
 El manual con capturas del módulo está en [`capturas/manual-citas.md`](capturas/manual-citas.md).
+
+## 8. Integración de ms-clinica (Catalina, rama `catalina-ep3`)
+
+Estado al 23-11-2026. El módulo clínico funciona de punta a punta: **React → Nginx → ms-clinica → MySQL**, y ms-citas lee los catálogos reales en modo `http`. El detalle de requisitos está en [`ers/05-clinica.md`](ers/05-clinica.md) §5.10 a 5.15 y el manual en [`capturas/manual-clinica.md`](capturas/manual-clinica.md).
+
+### 8.1 Services del frontend y endpoints (reemplaza la tabla de ms-clinica de la sección 2)
+
+Las firmas no cambiaron. Con `VITE_API_MODE=api` cada función llama a su endpoint; con `local`, o sin la variable (Vitest), usa los datos de EP2.
+
+| Función                                                          | Endpoint                                                                 | Quién                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `listarServicios(filtros)` / `obtenerServicio(codigo)`           | `GET /api/servicios?tipo&texto&soloActivos` · `/{codigo}` (404 → `null`) | Público                                                                           |
+| `crearServicio` · `actualizarServicio` · `cambiarEstadoServicio` | `POST /api/servicios` · `PATCH /{codigo}` · `PATCH /{codigo}/estado`     | ADMIN                                                                             |
+| `listarNutricionistas()` / `obtenerNutricionista(id)`            | `GET /api/nutricionistas` · `/{id}`                                      | Público                                                                           |
+| `actualizarFotoNutricionista` · `eliminarFotoNutricionista`      | `PUT` (multipart, parte `foto`) · `DELETE /api/nutricionistas/{id}/foto` | El propio nutricionista o ADMIN                                                   |
+| `registrarContacto` · `listarContactos`                          | `POST /api/contactos` · `GET /api/contactos`                             | Público (ver 8.4) · ADMIN y SECRETARIA                                            |
+| `listarPacientes(nutId)`                                         | `GET /api/pacientes?nutricionistaId`                                     | NUTRICIONISTA (los suyos) o ADMIN                                                 |
+| `obtenerFicha(pacienteId)`                                       | `GET /api/pacientes/{id}` (404 → `null`)                                 | A cargo, el paciente o ADMIN; otro nutricionista recibe `{ id, nutricionistaId }` |
+| `crearFicha(datos)`                                              | `POST /api/pacientes`                                                    | NUTRICIONISTA, a su nombre                                                        |
+| `listarMediciones` · `registrarMedicion`                         | `GET` · `POST /api/pacientes/{id}/mediciones`                            | Leer: a cargo, paciente, ADMIN · Escribir: a cargo                                |
+| `obtenerPlan` · `guardarPlan`                                    | `GET` (404 → `null`) · `PUT /api/pacientes/{id}/plan`                    | Igual que mediciones                                                              |
+
+- **Errores en los formularios.** `FormContacto`, `FormFicha`, `FormPlan`, `FormMedicion` y `FormServicio` muestran `errores` bajo cada campo y `mensaje` arriba del botón, venga de la validación local o del backend.
+- **Catálogo con respaldo.** Si ms-clinica no responde, las lecturas del catálogo usan las semillas de EP2, igual que el modo `auto` de ms-citas. Crear, editar o desactivar nunca usan el respaldo.
+- **Token.** Mientras no exista el login (G-32), los dos services piden el token del perfil `dev` con `asegurarToken` (`tokenPuente.js`), igual que `citasService`.
+
+### 8.2 Lo que ms-citas lee de ms-clinica (cumple la tabla de 7.3)
+
+| Endpoint                  | Campos                                                                                           | Verificado              |
+| ------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------- |
+| `GET /api/servicios`      | Lista sin paginar con `codigo`, `tipo`, `nombre`, `duracionMin`, `modalidad`, `precio`, `activo` | `CatalogoTest` y Docker |
+| `GET /api/nutricionistas` | Lista con `id`, `dias` (0-6), `horaInicio` y `horaFin` en `"HH:mm"`                              | `CatalogoTest` y Docker |
+
+Contra Docker, con `NUTRIVIDA_CLINICA_MODO=http`: el log de ms-citas dice `ms-clinica: modo HTTP http://ms-clinica:8083`, `GET /api/disponibilidad` y `/proximas` responden con la jornada real y `POST /api/citas` crea la cita (201).
+
+### 8.3 Cambios en archivos de otros integrantes
+
+Ninguno. Lo que hace falta en archivos ajenos queda como tarea de integración (8.4).
+
+### 8.4 Tareas de integración (después de unir en `main`)
+
+| #   | Dueño    | Archivo                                                           | Qué hacer                                                                                                                                           | Por qué                                                                                                                                         |
+| --- | -------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Simon    | `backend/ms-clinica/.../security/SecurityConfig.java`             | Agregar `.requestMatchers(HttpMethod.POST, "/api/contactos").permitAll()` antes de `anyRequest()` (patch de una línea entregado aparte).            | El formulario de contacto es para visitantes sin sesión (C-32). Hoy responde 401.                                                               |
+| 2   | Catalina | `frontend/src/services/serviciosService.js`, `clinicaApi.test.js` | Después de la tarea 1: quitar el respaldo local de `registrarContacto` ante un 401 y su prueba.                                                     | Ya no hará falta.                                                                                                                               |
+| 3   | Simon    | `serviciosService.js`, `fichasService.js`                         | Al borrar `tokenPuente.js`, quitar también `asegurarToken` de los `conToken` de estos dos services (quedan como `apiFetch`).                        | Si no, el build falla por el import.                                                                                                            |
+| 4   | Simon    | `.env.example`, `docker-compose.yml`                              | `NUTRIVIDA_CLINICA_MODO=http` para el video y la entrega.                                                                                           | C-31 ya está.                                                                                                                                   |
+| 5   | Simon    | `database/02_citas.sql` (y Gabriel en `01_usuarios.sql`)          | Agregar `SET NAMES utf8mb4;` después del `USE`.                                                                                                     | El cliente `mysql` del entrypoint lee los archivos como latin1 y guarda "alimentación" como "alimentaciÃ³n" (verificado con `HEX()` en Docker). |
+| 6   | Simon    | `exception/GlobalExceptionHandler.java` (los 3)                   | Opcional: traducir `HttpMediaTypeNotSupportedException` (415), `MaxUploadSizeExceededException` (413) y `MissingServletRequestPartException` (400). | Hoy salen como 500 si alguien llama mal a la foto desde Swagger. Desde React no ocurre.                                                         |
+| 7   | Simon    | `scripts/verificar.ps1` (S-41)                                    | Correr `mvn test` de ms-clinica (80 pruebas).                                                                                                       | Definición de terminado común.                                                                                                                  |
+
+### 8.5 Verificación
+
+- `mvn test` en `backend/ms-clinica`: **80 pruebas, 0 fallas**.
+- `npm test` en `frontend`: **473 pruebas** (456 anteriores + 17 de `clinicaApi.test.js`), `npm run lint` y `npm run build` sin errores.
+- `docker compose up -d --build`: los 5 contenedores arriba, ms-clinica arranca con `ddl-auto=validate` contra MySQL 8.4 y Swagger responde en :8083.
+- En el navegador (Docker, modo API): catálogo, ficha propia con mediciones y plan, aviso de ficha ajena, 409 de código repetido bajo el campo y contacto de un visitante.
