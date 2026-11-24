@@ -9,7 +9,10 @@ import cl.duoc.nutrivida.usuarios.dto.UsuarioSolicitud;
 import cl.duoc.nutrivida.usuarios.model.Rol;
 import cl.duoc.nutrivida.usuarios.service.UsuarioService;
 import cl.duoc.nutrivida.usuarios.service.UsuarioService.DatosCuenta;
+import cl.duoc.nutrivida.usuarios.config.EjemplosApi;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,7 +48,8 @@ public class UsuarioController {
 
     @Operation(summary = "Buscar usuarios", description = "Filtros opcionales. El nutricionista solo puede pedir rol=PACIENTE.")
     @ApiResponse(responseCode = "200", description = "Lista ordenada por id, sin claves")
-    @ApiResponse(responseCode = "403", description = "Paciente, o nutricionista pidiendo otro rol")
+    @ApiResponse(responseCode = "403", description = "Paciente, o nutricionista pidiendo otro rol",
+            content = @Content(mediaType = "application/json", examples = @ExampleObject(name = "rol", value = EjemplosApi.ERROR_403)))
     @PreAuthorize("hasAnyRole('NUTRICIONISTA','SECRETARIA','ADMIN')")
     @GetMapping
     public List<UsuarioRespuesta> listar(@RequestParam(required = false) Rol rol,
@@ -56,7 +60,8 @@ public class UsuarioController {
 
     @Operation(summary = "Una cuenta", description = "La propia (cualquier rol), cualquiera para secretaria y admin, "
             + "pacientes para el nutricionista. ms-citas la usa para saber si la cuenta sigue activa.")
-    @ApiResponse(responseCode = "200", description = "Cuenta con id y activo")
+    @ApiResponse(responseCode = "200", description = "Cuenta con id y activo",
+            content = @Content(mediaType = "application/json", examples = @ExampleObject(name = "cuenta", value = EjemplosApi.USUARIO)))
     @ApiResponse(responseCode = "403", description = "La cuenta no es tuya")
     @ApiResponse(responseCode = "404", description = "El usuario no existe")
     @GetMapping("/{id}")
@@ -67,7 +72,8 @@ public class UsuarioController {
     @Operation(summary = "Crear un usuario (admin)", description = "Cualquier rol. NUTRICIONISTA exige nutricionistaId.")
     @ApiResponse(responseCode = "201", description = "Creado con el siguiente id (U104…)")
     @ApiResponse(responseCode = "400", description = "Datos inválidos (errores por campo)")
-    @ApiResponse(responseCode = "409", description = "Correo, RUT o nutricionista ya usados")
+    @ApiResponse(responseCode = "409", description = "Correo, RUT o nutricionista ya usados",
+            content = @Content(mediaType = "application/json", examples = @ExampleObject(name = "duplicado", value = EjemplosApi.ERROR_409)))
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<UsuarioRespuesta> crear(@Valid @RequestBody UsuarioSolicitud s) {
