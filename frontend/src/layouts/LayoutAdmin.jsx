@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { cerrarSesion, obtenerSesion } from "../auth/auth.js";
 import { menuAdmin } from "../config/menu.js";
+import { useVerificarSesion } from "../auth/useVerificarSesion.js";
 
 function claseEnlace({ isActive }) {
   return `nav-link text-white rounded${isActive ? " bg-white bg-opacity-25 fw-bold" : ""}`;
@@ -11,6 +12,7 @@ export default function LayoutAdmin() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [menuAbiertoEn, setMenuAbiertoEn] = useState(null);
+  useVerificarSesion();
   const sesion = obtenerSesion();
   const menuAbierto = menuAbiertoEn === pathname;
 

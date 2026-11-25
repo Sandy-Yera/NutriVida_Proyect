@@ -1,9 +1,11 @@
 import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "../components/comunes/Navbar.jsx";
 import Footer from "../components/comunes/Footer.jsx";
+import { useVerificarSesion } from "../auth/useVerificarSesion.js";
 
 export default function LayoutPrincipal() {
   const location = useLocation();
+  useVerificarSesion();
   const mensaje = location.state?.mensaje;
   const esExito = location.state?.tipo === "exito";
 

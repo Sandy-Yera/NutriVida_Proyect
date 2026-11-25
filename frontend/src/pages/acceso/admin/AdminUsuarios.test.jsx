@@ -3,11 +3,16 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminUsuarios from "./AdminUsuarios.jsx";
 import { iniciarSesion } from "../../../auth/auth.js";
-import { cambiarEstado, listarUsuarios } from "../../../services/usuariosService.js";
+import {
+  cambiarEstado,
+  eliminarUsuario,
+  listarUsuarios,
+} from "../../../services/usuariosService.js";
 
 vi.mock("../../../services/usuariosService.js", () => ({
   listarUsuarios: vi.fn(),
   cambiarEstado: vi.fn(),
+  eliminarUsuario: vi.fn(),
 }));
 
 const usuarios = [
@@ -94,5 +99,23 @@ describe("AdminUsuarios", () => {
       await screen.findByText("No hay usuarios que coincidan con la búsqueda."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Limpiar filtros" })).toBeInTheDocument();
+  });
+
+  it("G-33: el botón Eliminar aparece solo en cuentas desactivadas y pide confirmación", async () => {
+    const inactivo = { ...usuarios[1], activo: false };
+    listarUsuarios.mockResolvedValue([usuarios[0], inactivo]);
+    eliminarUsuario.mockResolvedValue(undefined);
+    renderizar();
+
+    const boton = await screen.findByRole("button", { name: "Eliminar a Ana Pérez" });
+    expect(
+      screen.queryByRole("button", { name: "Eliminar a Administración NutriVida" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(boton);
+    expect(eliminarUsuario).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar" }));
+
+    await waitFor(() => expect(eliminarUsuario).toHaveBeenCalledWith("U102"));
+    expect(await screen.findByRole("status")).toHaveTextContent("Cuenta de Ana Pérez eliminada.");
   });
 });

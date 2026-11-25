@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { iniciarSesion, rutaInicioPorRol } from "../../auth/auth.js";
+import { iniciarSesion, ingresar, rutaInicioPorRol } from "../../auth/auth.js";
+import { usarApi } from "../../services/http.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -8,7 +9,19 @@ export default function Login() {
   const [correo, setCorreo] = useState("");
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
+  const [enviando, setEnviando] = useState(false);
   const desde = location.state?.desde;
+  // Mensaje de SesionExpirada o RutaProtegida cuando el token venció (401).
+  const aviso = location.state?.aviso;
+
+  function terminar(resultado) {
+    if (!resultado.ok) {
+      setError(resultado.error);
+      setEnviando(false);
+      return;
+    }
+    navigate(desde ?? rutaInicioPorRol(resultado.usuario.rol), { replace: true });
+  }
 
   function manejarEnvio(evento) {
     evento.preventDefault();
@@ -16,12 +29,13 @@ export default function Login() {
       setError("Debe completar correo y contraseña.");
       return;
     }
-    const resultado = iniciarSesion(correo, clave);
-    if (!resultado.ok) {
-      setError(resultado.error);
+    // Modo local: el login de EP2, síncrono. Modo API: POST /api/auth/login (G-32).
+    if (!usarApi()) {
+      terminar(iniciarSesion(correo, clave));
       return;
     }
-    navigate(desde ?? rutaInicioPorRol(resultado.usuario.rol), { replace: true });
+    setEnviando(true);
+    ingresar(correo, clave).then(terminar);
   }
 
   return (
@@ -29,7 +43,12 @@ export default function Login() {
       <div className="row justify-content-center">
         <div className="col-12 col-sm-10 col-md-6 col-lg-5 col-xl-4">
           <h1 className="h3 mb-2">Iniciar sesión</h1>
-          {desde && (
+          {aviso && (
+            <div className="alert alert-warning py-2" role="status">
+              {aviso}
+            </div>
+          )}
+          {desde && !aviso && (
             <p className="text-body-secondary">
               Inicia sesión para continuar con lo que estabas haciendo.
             </p>
@@ -66,8 +85,8 @@ export default function Login() {
                 {error}
               </div>
             )}
-            <button type="submit" className="btn btn-primary w-100">
-              Ingresar
+            <button type="submit" className="btn btn-primary w-100" disabled={enviando}>
+              {enviando ? "Ingresando..." : "Ingresar"}
             </button>
           </form>
           <p className="mt-3 mb-0">

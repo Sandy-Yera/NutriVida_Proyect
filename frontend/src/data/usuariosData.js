@@ -150,6 +150,16 @@ export function cambiarRol(id, rol) {
   return actualizar(id, { rol });
 }
 
+// Borra la cuenta. Las reglas (solo admin, no la propia, solo desactivadas) van en el service.
+export function eliminar(id) {
+  const usuarios = leer(CLAVE, usuariosSemilla);
+  buscarIndice(usuarios, id);
+  guardar(
+    CLAVE,
+    usuarios.filter((u) => u.id !== id),
+  );
+}
+
 export function registrarPaciente(datos) {
   return crear({ ...datos, rol: "PACIENTE", nutricionistaId: null, activo: true });
 }

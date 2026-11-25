@@ -3,6 +3,7 @@ import {
   actualizarUsuario,
   cambiarEstado,
   cambiarRol,
+  eliminarUsuario,
   listarUsuarios,
   obtenerUsuario,
   registrarPaciente,
@@ -74,5 +75,27 @@ describe("usuariosService: permisos", () => {
     await expect(cambiarRol("U100", "ADMIN")).rejects.toMatchObject({ estado: 403 });
     cerrarSesion();
     await expect(actualizarUsuario("U100", { nombre: "X" })).rejects.toMatchObject({ estado: 401 });
+  });
+});
+
+describe("usuariosService: eliminar (G-33)", () => {
+  it("solo el admin elimina, y solo cuentas desactivadas que no son la suya", async () => {
+    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+
+    await expect(eliminarUsuario("U102")).rejects.toThrow(
+      "Desactiva la cuenta antes de eliminarla.",
+    );
+    await expect(eliminarUsuario("U001")).rejects.toThrow("No puedes eliminar tu propia cuenta.");
+    await cambiarEstado("U102", false);
+    await eliminarUsuario("U102");
+    expect(await obtenerUsuario("U102")).toBeNull();
+  });
+
+  it("otro rol no puede eliminar cuentas", async () => {
+    iniciarSesion("recepcion@nutrivida.cl", "Recepcion2026!");
+
+    await expect(eliminarUsuario("U102")).rejects.toThrow(
+      "Solo el administrador puede hacer esto.",
+    );
   });
 });
