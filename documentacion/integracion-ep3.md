@@ -260,3 +260,90 @@ No hay cambios en archivos de Gabriel ni de Catalina. Estos archivos son de la b
 `.\scripts\verificar.ps1` (sin parámetros) da **PASA** con: 156 pruebas JUnit de ms-citas, pruebas mutantes (PIT) sin sobrevivientes nuevos, 456 pruebas de Vitest y ESLint, los 5 contenedores, el `validate` del esquema en MySQL y las peticiones de humo autenticadas: crear, 409, 402, 403, secretaria por el proxy, `POST` con `Origin` por el proxy, cancelar con reembolso y eliminar.
 
 El manual con capturas del módulo está en [`capturas/manual-citas.md`](capturas/manual-citas.md).
+
+## 8. Integración de ms-usuarios (Gabriel, rama `gabriel-ep3`)
+
+Estado al 23-11-2026. Login real con JWT, cuentas en MySQL y el frontend de acceso en modo dual: **React → Nginx → ms-usuarios → MySQL `nutrivida_usuarios`**. ms-usuarios es el único que emite el token; ms-citas y ms-clinica solo lo validan.
+
+### 8.1 Recorrido del login
+
+```text
+Login.jsx ── POST /api/auth/login ──► Nginx :8080 ──► ms-usuarios :8081 ── BCrypt ──► MySQL nutrivida_usuarios
+   │ guarda tokenSesion y usuarioActual
+   ├─ F5: LayoutPrincipal / LayoutAdmin ── GET /api/auth/me ──► ¿la cuenta sigue activa? (401 → /login)
+   └─ cada petición: Authorization: Bearer … ──► ms-citas / ms-clinica validan el JWT con el mismo JWT_SECRET
+                                                   └─ ms-citas ── GET /api/usuarios/{id} ──► ms-usuarios (¿activa?)
+```
+
+### 8.2 Endpoints de ms-usuarios
+
+| Método y ruta | Quién | Respuesta | Notas |
+| --- | --- | --- | --- |
+| `POST /api/auth/login` | Público | 200 `{ token, tipo, expiraEn, usuario }` · 401 · 403 | Clave o correo incorrectos: el mismo 401. Cuenta desactivada: 403. |
+| `POST /api/auth/registro` | Público | 201 cuenta · 400 · 409 | Siempre PACIENTE activo. RUT con dígito verificador. |
+| `GET /api/auth/me` | Con token | 200 · 401 | Lee la cuenta de la base: desactivada → 401. |
+| `GET /api/usuarios?rol&activo&texto` | NUTRICIONISTA (solo `rol=PACIENTE`), SECRETARIA, ADMIN | 200 | Texto sin tildes en nombre, correo o RUT. |
+| `GET /api/usuarios/{id}` | La propia cuenta (cualquier rol), SECRETARIA, ADMIN; NUTRICIONISTA solo pacientes | 200 `{ id, …, activo }` · 403 · 404 | Lo usa `UsuariosHttp` de ms-citas con el token del propio usuario. |
+| `POST /api/usuarios` | ADMIN | 201 · 400 · 409 | 409 con `errores.correo`, `rut` o `nutricionistaId`. |
+| `PATCH /api/usuarios/{id}` | ADMIN (menos su rol y estado) o el propio usuario (nombre, apellido, teléfono) | 200 · 403 · 409 | Campo ausente = sin cambio. |
+| `PATCH /api/usuarios/{id}/estado` | ADMIN, nunca sobre sí mismo | 200 · 403 | |
+| `PATCH /api/usuarios/{id}/rol` | ADMIN, nunca sobre sí mismo | 200 · 403 · 409 | |
+| `PUT /api/usuarios/{id}/clave` | El propio usuario | 200 · 400 · 403 | Exige la clave actual. |
+| `DELETE /api/usuarios/{id}` | ADMIN | 204 · 403 · 409 | Solo cuentas ya desactivadas (ver 8.5). |
+| `GET /api/articulos`, `GET /api/articulos/{id}` | Público | 200 · 404 | Los consejos de EP2. |
+
+Swagger: http://localhost:8081/swagger-ui.html (botón **Authorize** con el token del login, sin la palabra Bearer).
+
+### 8.3 Services del frontend (modo dual)
+
+Con `VITE_API_MODE=api` cada función llama a su endpoint; sin la variable (Vitest) usa `data/` como en EP2. Las firmas no cambiaron.
+
+| Función | Modo API |
+| --- | --- |
+| `ingresar(correo, clave)` (nueva, `auth.js`) | `POST /api/auth/login`; guarda el token (`guardarToken`) y la sesión |
+| `obtenerSesion()` | Con token: la sesión del login mientras el token no venza (claim `exp`). Sin token: igual que EP2 |
+| `verificarSesion()` (nueva) | `GET /api/auth/me` al montar los layouts (F5) |
+| `cerrarSesion()` | Borra `usuarioActual` y `tokenSesion` |
+| `listarUsuarios`, `obtenerUsuario`, `crearUsuario`, `actualizarUsuario`, `cambiarEstado`, `cambiarRol`, `cambiarClave`, `registrarPaciente` | Endpoints de 8.2 (`obtenerUsuario` → `null` con 404) |
+| `eliminarUsuario(id)` (nueva) | `DELETE /api/usuarios/{id}` |
+| `listarArticulos`, `obtenerArticulo` | `GET /api/articulos`, `/{id}` |
+
+- **401:** `apiFetch` cierra la sesión y `SesionExpirada` lleva a `/login`. Si el token venció mientras la página estaba cerrada, `RutaProtegida` lleva a `/login` con el aviso "Tu sesión expiró. Inicia sesión nuevamente.".
+- **403:** no cierra la sesión. La página muestra el mensaje del backend; una ruta de otro rol vuelve al inicio con "No tienes acceso a esa sección.".
+- `iniciarSesion` (login de EP2, síncrono) se mantiene: lo usan las pruebas de los tres módulos, incluidas las de modo API de citas.
+
+### 8.4 Decisión: algoritmo del JWT (pendiente 7.6.3)
+
+**Problema.** `JwtService.generar` firma con `signWith(clave)`, y jjwt elige el algoritmo por el largo de la clave: HS256 con 32 a 47 bytes, HS384 con 48 a 63 y HS512 con 64 o más. Con un `JWT_SECRET` de 48 caracteres el login real emitió **HS384** (comprobado contra MySQL el 23-11). La validación de los tres servicios acepta cualquiera, así que nada se rompe, pero no cumple el contrato (§3: HS256).
+
+**Decisión.** Se mantiene HS256 en el contrato y se fija en el emisor: `signWith(clave, Jwts.SIG.HS256)` en `JwtService` de ms-usuarios. Así el algoritmo no depende del largo del secreto que genere `levantar.ps1`. Como `security/` es igual en los tres servicios y su dueño es Simon, el cambio va como **tarea de integración** (8.6), con el parche listo. `ApiAuthTest.algoritmoDelContrato` ya revisa que el login emita HS256 con el secreto de desarrollo.
+
+### 8.5 Decisiones del módulo
+
+1. **Eliminar solo cuentas desactivadas.** ms-citas y ms-clinica guardan `pacienteId` y `nutricionistaId` por valor, sin claves foráneas. Borrar una cuenta activa dejaría citas y fichas apuntando a nadie. Se desactiva primero (pierde el acceso en todos los servicios) y recién entonces se puede borrar. Mismo criterio que el `DELETE` de citas (contrato §6.1).
+2. **El nutricionista lee pacientes.** Su agenda y sus fichas muestran nombres, por eso puede listar y leer cuentas de rol PACIENTE, pero no las del personal.
+3. **Mismo 401 para correo inexistente y clave incorrecta**, para no revelar qué correos están registrados.
+4. **U103 desactivada** en las semillas, para mostrar en el video el 403 del login y el 401 de ms-citas.
+5. **`SET NAMES utf8mb4` en `01_usuarios.sql`.** El cliente `mysql` del contenedor lee los scripts en latin1 y las tildes quedaban dañadas ("TomÃ¡s").
+
+### 8.6 Tareas de integración (después de unir en `main`)
+
+| # | Dueño | Archivo | Qué | Por qué |
+| --- | --- | --- | --- | --- |
+| 1 | Simon | `backend/*/security/JwtService.java` | `.signWith(clave, Jwts.SIG.HS256)` en `generar` (los 3, para que sigan iguales) | Decisión 8.4 |
+| 2 | Simon | `database/02_citas.sql` | `SET NAMES utf8mb4;` antes de `USE nutrivida_citas;` | El motivo "Plan de alimentación…" queda como "alimentaciÃ³n" en MySQL |
+| 3 | Simon | `frontend/src/services/tokenPuente.js`, `citasService.js` | Borrar el puente y sus llamadas `asegurarToken` | El token ahora lo guarda `ingresar` |
+| 4 | Simon | `.env.example`, `docker-compose.yml` | `NUTRIVIDA_USUARIOS_MODO=http`, `MS_CITAS_PERFILES=mysql` | ms-usuarios ya responde `GET /api/usuarios/{id}` |
+| 5 | Simon (opcional) | `backend/ms-usuarios/security/SecurityConfig.java` | Dejar públicas solo `/api/auth/login` y `/api/auth/registro` en vez de `/api/auth/**` | Hoy `/me` se protege en `AuthService`; funciona, pero es más claro en la configuración |
+| 6 | Simon (opcional) | `SecurityConfig` | `POST /api/usuarios` con `hasRole('ADMIN')` en la configuración | Hoy un paciente con un cuerpo inválido recibe 400 (corre `@Valid`) antes del 403 de `@PreAuthorize`. Con un cuerpo válido recibe 403. Pasa igual en ms-citas |
+
+No se modificó ningún archivo de Simon ni de Catalina en esta rama.
+
+### 8.7 Verificación (23-11-2026)
+
+- `mvn test` en ms-usuarios: **78 pruebas** (repositorio, login y registro, API de usuarios, matriz de seguridad de 28 filas, Mockito, reglas y Swagger).
+- `npm test`: **476 pruebas** (las 456 de antes más 20 de modo API de acceso), `npm run lint`, `npx prettier --check .` y `npm run build`.
+- Docker (MySQL 8.4 y los 5 contenedores, con imágenes armadas desde los `.jar` y el `dist` compilados en el equipo) con `ddl-auto=validate` contra `01_usuarios.sql`, y peticiones de humo por Nginx: login, `/me` con y sin token, 403 de paciente sobre otra cuenta, crear (201) y duplicar (409), y ms-citas en modo `http` (200 con la cuenta activa y 401 a los 30 s de desactivarla).
+- Navegador (Playwright, :8080): login, F5 con la sesión, `/admin` como paciente (aviso sin cerrar sesión), token vencido → `/login` con aviso, eliminar una cuenta desactivada, token con firma falsa → `/login` y logout.
+
+El manual con las capturas está en [`capturas/manual-acceso.md`](capturas/manual-acceso.md).
