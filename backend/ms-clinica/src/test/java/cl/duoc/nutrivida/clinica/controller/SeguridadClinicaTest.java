@@ -138,6 +138,7 @@ class SeguridadClinicaTest {
             "GET,    /api/contactos,                 -,        PACIENTE,      403",
             "GET,    /api/contactos,                 -,        SECRETARIA,    200",
             "GET,    /api/contactos,                 -,        ADMIN,         200",
+            "POST,   /api/contactos,                 CONTACTO, ANONIMO,       201",
             "POST,   /api/contactos,                 CONTACTO, PACIENTE,      201",
             "DELETE, /api/contactos/CT001,           -,        SECRETARIA,    403",
             "DELETE, /api/contactos/CT001,           -,        ADMIN,         204",

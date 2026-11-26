@@ -20,8 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Formulario de contacto. El POST es para cualquier visitante: mientras SecurityConfig no lo
- * declare público (tarea de integración), pide token.
+ * Formulario de contacto. El POST es para cualquier visitante (público en SecurityConfig);
+ * leer y borrar los mensajes queda para el personal.
  */
 @RestController
 @RequestMapping("/api/contactos")

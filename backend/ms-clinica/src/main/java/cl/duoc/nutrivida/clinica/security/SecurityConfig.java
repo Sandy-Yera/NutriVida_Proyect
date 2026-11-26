@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(PUBLICAS).permitAll()
                         .requestMatchers(HttpMethod.GET, GET_PUBLICAS).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/contactos").permitAll() // C-32: formulario de contacto sin sesión
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFiltro, UsernamePasswordAuthenticationFilter.class);
