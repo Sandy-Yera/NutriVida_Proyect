@@ -404,3 +404,31 @@ Ninguno. Lo que hace falta en archivos ajenos queda como tarea de integración (
 - `npm test` en `frontend`: **473 pruebas** (456 anteriores + 17 de `clinicaApi.test.js`), `npm run lint` y `npm run build` sin errores.
 - `docker compose up -d --build`: los 5 contenedores arriba, ms-clinica arranca con `ddl-auto=validate` contra MySQL 8.4 y Swagger responde en :8083.
 - En el navegador (Docker, modo API): catálogo, ficha propia con mediciones y plan, aviso de ficha ajena, 409 de código repetido bajo el campo y contacto de un visitante.
+
+## 10. Integración en `main` (Gabriel, 26-11-2026)
+
+Orden: `gabriel-ep3` y `catalina-ep3` con `git merge --no-ff`. El único conflicto fue este documento (las dos ramas agregaron una sección 8): la de ms-clinica pasó a ser la sección 9. Después se hicieron las tareas de integración de las secciones 8.6 y 9.4. Son archivos de Simon y de Catalina: quedan registrados aquí y se avisó a sus dueños.
+
+### 10.1 Tareas hechas
+
+| Tarea | Archivos | Commit |
+| --- | --- | --- |
+| 8.6.1 JWT con HS256 en los 3 servicios | `backend/*/security/JwtService.java` | `fix(repo): JWT firmado con HS256 y tildes de 02_citas.sql` |
+| 8.6.2 y 9.4.5 `SET NAMES utf8mb4` | `database/02_citas.sql` | el mismo |
+| 8.6.3 y 9.4.3 borrar el puente de token | `tokenPuente.js` (borrado), `citasService.js`, `pagosService.js`, `serviciosService.js`, `fichasService.js`, `modoApi.test.js`, `clinicaApi.test.js` | `refactor(repo): quita tokenPuente` |
+| 9.4.1 contacto sin token | `backend/ms-clinica/.../SecurityConfig.java`, `ContactoController.java` (comentario), `SeguridadClinicaTest.java` (fila anónima) | `fix(clinica): POST /api/contactos sin token` |
+| 8.6.4 y 9.4.4 modos `http` sin perfil dev; humo con el login | `docker-compose.yml`, `.env.example`, `scripts/verificar.ps1`, `backend/ms-citas/peticiones.http` | `chore(repo): ms-citas en modo http y sin perfil dev` |
+
+### 10.2 Pendientes
+
+- **Catalina (9.4.2):** quitar el respaldo local de `registrarContacto` ante un 401 y su prueba. Ya no hace falta.
+- **Simon (S-40 a S-43):** healthchecks, `levantar.ps1/.sh`, la parte de ms-usuarios y ms-clinica en `verificar.ps1`, guion del video e índice. Al unir `simon-ep3` habrá conflictos en `docker-compose.yml`, `.env.example` y `verificar.ps1`: hay que conservar los modos `http` y el perfil `mysql` de 10.1.
+- **Opcionales:** 8.6.5, 8.6.6 y 9.4.6.
+- `manual-citas.md` todavía menciona el plan B del perfil dev (sección 1): lo actualiza Simon.
+
+### 10.3 Verificación (26-11-2026)
+
+- JUnit: ms-usuarios 78, ms-citas 156, ms-clinica 81. Vitest: 490, más ESLint y `npm run build`.
+- Docker con los 5 contenedores y el `.env` sacado de `.env.example`: el login emite HS256, `POST /api/dev/token` da 404, ms-citas arranca en modo HTTP con ms-usuarios y ms-clinica, Mis citas, disponibilidad y servicios por el proxy, contacto anónimo con 201 y tildes correctas en las citas.
+- Navegador (Playwright, :8080): el recorrido de acceso (login, F5, 403, token vencido, eliminar, logout) y Mis citas sin llamadas a `/api/dev`.
+- `verificar.ps1` no se ejecutó en este equipo (sin PowerShell): correrlo en Windows antes de grabar.
