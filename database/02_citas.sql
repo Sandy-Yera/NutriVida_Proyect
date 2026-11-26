@@ -11,6 +11,8 @@
 -- - Mismos IDs que en EP2: C0001…, P0001… (§1).
 -- - La base es la última barrera: UNIQUE(cita.pago_id) y el candado de agenda_dia (§5).
 -- =============================================================================================
+-- El cliente mysql del contenedor lee el archivo en latin1: sin esto las tildes quedan dañadas.
+SET NAMES utf8mb4;
 USE nutrivida_citas;
 
 -- Pago simulado (RN-18, RN-19). Va antes que cita porque cita.pago_id apunta aquí.

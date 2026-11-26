@@ -40,7 +40,7 @@ public class JwtService {
                 .claim("nombre", usuario.nombre())
                 .issuedAt(Date.from(ahora))
                 .expiration(Date.from(ahora.plus(vigencia)))
-                .signWith(clave);
+                .signWith(clave, Jwts.SIG.HS256); // contrato §3: HS256 sin importar el largo de JWT_SECRET
         if (usuario.nutricionistaId() != null) builder.claim("nutricionistaId", usuario.nutricionistaId());
         return builder.compact();
     }
