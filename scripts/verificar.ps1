@@ -290,25 +290,22 @@ try {
         Anotar 'ms-citas -> ms-usuarios (modo)' ([bool]$modoUsuarios) $(if ($modoUsuarios) { $modoUsuarios } else { 'falta la línea "ms-usuarios: modo" en el log' })
 
         # R7 y R10: humo autenticado contra la API real (MySQL, JWT, roles y dueño). Los tokens
-        # salen del perfil dev (plan B). Sin el perfil, que es como se entrega, se omite.
+        # salen del login real de ms-usuarios (G-32), con las cuentas demo de 01_usuarios.sql.
         $api = 'http://localhost:8082'
         $tokenDe = {
-            param($id, $rol)
-            $r = PedirApi 'POST' "$api/api/dev/token" ('{"id":"' + $id + '","rol":"' + $rol + '"}')
+            param($correo, $clave)
+            $r = PedirApi 'POST' 'http://localhost:8081/api/auth/login' ('{"correo":"' + $correo + '","clave":"' + $clave + '"}')
             if ($r.Status -eq 200) { return ($r.Cuerpo | ConvertFrom-Json).token }
             return $null
         }
-        $prueba = PedirApi 'POST' "$api/api/dev/token" '{"id":"U100","rol":"PACIENTE"}'
-        if ($prueba.Status -eq 404) {
-            Anotar 'Perfil dev de ms-citas' $true 'apagado (modo entrega): humo autenticado omitido'
-        } elseif ($prueba.Status -ne 200) {
-            Anotar 'Perfil dev de ms-citas' $false "POST /api/dev/token respondió HTTP $($prueba.Status)"
+        $paciente = & $tokenDe 'javiera.soto@correo.cl' 'Paciente2026!'
+        if (-not $paciente) {
+            Anotar 'Login de ms-usuarios' $false 'POST /api/auth/login no entregó token: humo autenticado omitido'
         } else {
-            Anotar 'Perfil dev de ms-citas' $true 'ACTIVO (plan B). Para el video: MS_CITAS_PERFILES=mysql en .env'
-            $paciente = & $tokenDe 'U100' 'PACIENTE'
-            $otro = & $tokenDe 'U101' 'PACIENTE'
-            $secretaria = & $tokenDe 'U002' 'SECRETARIA'
-            $admin = & $tokenDe 'U001' 'ADMIN'
+            Anotar 'Login de ms-usuarios' $true 'token del login real (sin perfil dev)'
+            $otro = & $tokenDe 'tomas.h@correo.cl' 'Paciente2026!'
+            $secretaria = & $tokenDe 'recepcion@nutrivida.cl' 'Recepcion2026!'
+            $admin = & $tokenDe 'admin@nutrivida.cl' 'Admin2026!'
 
             # PowerShell 5.1 entrega el arreglo JSON como un solo objeto: ForEach-Object lo desenrolla.
             $libres = @((PedirApi 'GET' "$api/api/disponibilidad/proximas?cantidad=20").Cuerpo | ConvertFrom-Json | ForEach-Object { $_ })
@@ -346,7 +343,7 @@ try {
 
             # Como el navegador: un POST por el proxy lleva Origin. Si Nginx no reenvía el puerto
             # en Host, Spring lo toma por otro sitio y responde 403 de CORS (encontrado en R9).
-            $r = PedirApi 'POST' 'http://localhost:8080/api/dev/token' '{"id":"U100","rol":"PACIENTE"}' '' 'http://localhost:8080'
+            $r = PedirApi 'POST' 'http://localhost:8080/api/auth/login' '{"correo":"javiera.soto@correo.cl","clave":"Paciente2026!"}' '' 'http://localhost:8080'
             Anotar 'POST por el proxy con Origin' ($r.Status -eq 200) "HTTP $($r.Status) (403 = Host sin puerto en nginx.conf)"
         }
     }

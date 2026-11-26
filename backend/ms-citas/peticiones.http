@@ -3,52 +3,53 @@
 # Para la extensión "REST Client" de VS Code (humao.rest-client): "Send Request" sobre cada bloque.
 # Requisito: docker compose up -d (ms-citas en :8082 con MySQL y las semillas de 02_citas.sql).
 #
-# Los tokens salen del perfil dev (POST /api/dev/token, plan B mientras ms-usuarios no tenga
-# login). Con el login de Gabriel (G-32) se reemplazan por POST /api/auth/login en :8081.
+# Los tokens salen del login real de ms-usuarios (POST /api/auth/login en :8081, G-32), con las
+# cuentas demo de database/01_usuarios.sql. Los nombres tokenAna y tokenBruno se mantienen.
 # Orden sugerido: tokens → disponibilidad → crear → 409/402 → dueño (403) → estados → eliminar.
 #
-# Semillas: U100 Ana y U101 Bruno (pacientes), U002 secretaria, U001 admin, U010 Carolina (NUT001).
+# Semillas: U100 Javiera ("Ana") y U101 Tomás ("Bruno"), pacientes; U002 secretaria, U001 admin, U010 Carolina (NUT001).
 # Tarjeta aprobada 4242 4242 4242 4242; rechazada 4000 0000 0000 0002.
 
 @base = http://localhost:8082
+@usuarios = http://localhost:8081
 # Un lunes, miércoles o viernes (días de NUT001) a más de 24 h y a menos de 60 días de hoy.
 @fecha = 2026-11-25
 
-# ============================================================== tokens (perfil dev)
+# ============================================================== tokens (login de ms-usuarios)
 
 # @name tokenAna
-POST {{base}}/api/dev/token
+POST {{usuarios}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U100","rol":"PACIENTE","nombre":"Ana Rojas"}
+{"correo":"javiera.soto@correo.cl","clave":"Paciente2026!"}
 
 ###
 # @name tokenBruno
-POST {{base}}/api/dev/token
+POST {{usuarios}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U101","rol":"PACIENTE","nombre":"Bruno Díaz"}
+{"correo":"tomas.h@correo.cl","clave":"Paciente2026!"}
 
 ###
 # @name tokenSecretaria
-POST {{base}}/api/dev/token
+POST {{usuarios}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U002","rol":"SECRETARIA","nombre":"Marta Soto"}
+{"correo":"recepcion@nutrivida.cl","clave":"Recepcion2026!"}
 
 ###
 # @name tokenNutricionista
-POST {{base}}/api/dev/token
+POST {{usuarios}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U010","rol":"NUTRICIONISTA","nombre":"Carolina Fuentes","nutricionistaId":"NUT001"}
+{"correo":"cfuentes@nutrivida.cl","clave":"Nutri2026!"}
 
 ###
 # @name tokenAdmin
-POST {{base}}/api/dev/token
+POST {{usuarios}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U001","rol":"ADMIN","nombre":"Admin"}
+{"correo":"admin@nutrivida.cl","clave":"Admin2026!"}
 
 # ============================================================== públicos (sin token)
 
