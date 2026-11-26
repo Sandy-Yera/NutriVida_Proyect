@@ -6,28 +6,32 @@ import { rutasAcceso, rutasAdminAcceso } from "./rutas/rutasAcceso.jsx";
 import { rutasCitas, rutasAdminCitas } from "./rutas/rutasCitas.jsx";
 import { rutasClinica, rutasAdminClinica } from "./rutas/rutasClinica.jsx";
 import NoEncontrada from "./pages/acceso/NoEncontrada.jsx";
+import SesionExpirada from "./components/comunes/SesionExpirada.jsx";
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<LayoutPrincipal />}>
-        {rutasClinica}
-        {rutasCitas}
-        {rutasAcceso}
-        <Route path="*" element={<NoEncontrada />} />
-      </Route>
-      <Route
-        path="admin"
-        element={
-          <RutaProtegida roles={["ADMIN"]}>
-            <LayoutAdmin />
-          </RutaProtegida>
-        }
-      >
-        {rutasAdminAcceso}
-        {rutasAdminCitas}
-        {rutasAdminClinica}
-      </Route>
-    </Routes>
+    <>
+      <SesionExpirada />
+      <Routes>
+        <Route element={<LayoutPrincipal />}>
+          {rutasClinica}
+          {rutasCitas}
+          {rutasAcceso}
+          <Route path="*" element={<NoEncontrada />} />
+        </Route>
+        <Route
+          path="admin"
+          element={
+            <RutaProtegida roles={["ADMIN"]}>
+              <LayoutAdmin />
+            </RutaProtegida>
+          }
+        >
+          {rutasAdminAcceso}
+          {rutasAdminCitas}
+          {rutasAdminClinica}
+        </Route>
+      </Routes>
+    </>
   );
 }

@@ -1,25 +1,38 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { articulosSemilla } from "../../data/semillas/articulos.js";
+import { obtenerArticulo } from "../../services/articulosService.js";
 import { obtenerNutricionista } from "../../services/serviciosService.js";
 import { formatearFechaLarga } from "../../utils/formato.js";
 
 export default function ConsejoDetalle() {
   const { id } = useParams();
-  const articulo = articulosSemilla.find((a) => a.id === id);
-  const autorId = articulo?.autorNutricionistaId;
-  const [autor, setAutor] = useState(null);
+  // carga.id permite descartar la carga anterior al pasar de un consejo a otro.
+  const [carga, setCarga] = useState(null);
 
   useEffect(() => {
-    if (!autorId) return;
     let vigente = true;
-    obtenerNutricionista(autorId).then((encontrado) => {
-      if (vigente) setAutor(encontrado);
-    });
+    obtenerArticulo(id)
+      .then(async (articulo) => {
+        const autor = articulo ? await obtenerNutricionista(articulo.autorNutricionistaId) : null;
+        if (vigente) setCarga({ id, articulo, autor });
+      })
+      .catch(() => {
+        if (vigente) setCarga({ id, articulo: null, autor: null });
+      });
     return () => {
       vigente = false;
     };
-  }, [autorId]);
+  }, [id]);
+
+  if (carga === null || carga.id !== id) {
+    return (
+      <section className="container py-4">
+        <p role="status">Cargando consejo...</p>
+      </section>
+    );
+  }
+
+  const { articulo, autor } = carga;
 
   if (!articulo) {
     return (

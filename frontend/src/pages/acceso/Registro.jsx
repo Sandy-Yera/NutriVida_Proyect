@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import CampoTexto from "../../components/acceso/CampoTexto.jsx";
-import { iniciarSesion } from "../../auth/auth.js";
+import { ingresar } from "../../auth/auth.js";
 import { registrarPaciente } from "../../services/usuariosService.js";
 import { formatearRut, formatearTelefono } from "../../utils/formato.js";
 import { validarRegistro } from "../../utils/validaciones.js";
@@ -53,15 +53,17 @@ export default function Registro() {
         fechaNacimiento: datos.fechaNacimiento,
         clave: datos.clave,
       });
-      iniciarSesion(datos.correo, datos.clave);
+      await ingresar(datos.correo, datos.clave);
       navigate("/mis-citas", {
         replace: true,
         state: { mensaje: "Cuenta creada. Ya puedes solicitar tu primera cita.", tipo: "exito" },
       });
     } catch (error) {
-      if (error.campo) {
-        setErrores({ [error.campo]: error.message });
-        document.getElementById(error.campo)?.focus();
+      // En modo API el 400 puede traer varios campos (errores) y el 409, uno (campo).
+      const delBackend = error.errores ?? (error.campo ? { [error.campo]: error.message } : null);
+      if (delBackend) {
+        setErrores(delBackend);
+        document.getElementById(Object.keys(delBackend)[0])?.focus();
       } else {
         setErrorGeneral("No pudimos crear tu cuenta. Inténtalo de nuevo.");
       }

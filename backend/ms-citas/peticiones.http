@@ -1,0 +1,201 @@
+### ms-citas · peticiones de prueba (R10)
+#
+# Para la extensión "REST Client" de VS Code (humao.rest-client): "Send Request" sobre cada bloque.
+# Requisito: docker compose up -d (ms-citas en :8082 con MySQL y las semillas de 02_citas.sql).
+#
+# Los tokens salen del perfil dev (POST /api/dev/token, plan B mientras ms-usuarios no tenga
+# login). Con el login de Gabriel (G-32) se reemplazan por POST /api/auth/login en :8081.
+# Orden sugerido: tokens → disponibilidad → crear → 409/402 → dueño (403) → estados → eliminar.
+#
+# Semillas: U100 Ana y U101 Bruno (pacientes), U002 secretaria, U001 admin, U010 Carolina (NUT001).
+# Tarjeta aprobada 4242 4242 4242 4242; rechazada 4000 0000 0000 0002.
+
+@base = http://localhost:8082
+# Un lunes, miércoles o viernes (días de NUT001) a más de 24 h y a menos de 60 días de hoy.
+@fecha = 2026-11-25
+
+# ============================================================== tokens (perfil dev)
+
+# @name tokenAna
+POST {{base}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U100","rol":"PACIENTE","nombre":"Ana Rojas"}
+
+###
+# @name tokenBruno
+POST {{base}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U101","rol":"PACIENTE","nombre":"Bruno Díaz"}
+
+###
+# @name tokenSecretaria
+POST {{base}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U002","rol":"SECRETARIA","nombre":"Marta Soto"}
+
+###
+# @name tokenNutricionista
+POST {{base}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U010","rol":"NUTRICIONISTA","nombre":"Carolina Fuentes","nutricionistaId":"NUT001"}
+
+###
+# @name tokenAdmin
+POST {{base}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U001","rol":"ADMIN","nombre":"Admin"}
+
+# ============================================================== públicos (sin token)
+
+### Horas libres de Carolina (NUT001 atiende lunes, miércoles y viernes 09:00-17:00)
+GET {{base}}/api/disponibilidad?nutricionistaId=NUT001&fecha={{fecha}}&duracion=30
+
+### Agenda rápida del Inicio: las 6 próximas horas libres de toda la clínica (decisión 3)
+GET {{base}}/api/disponibilidad/proximas?cantidad=6
+
+# ============================================================== crear (pago + cita)
+
+### 201: Ana agenda un control con Carolina. Anota el id (C0006) y el pagoId (P0006).
+# @name crear
+POST {{base}}/api/citas
+Authorization: Bearer {{tokenAna.response.body.token}}
+Content-Type: application/json
+
+{
+  "servicioCodigo": "CN002",
+  "nutricionistaId": "NUT001",
+  "fecha": "{{fecha}}",
+  "hora": "10:00",
+  "motivo": "Control mensual de peso",
+  "tarjeta": { "titular": "Ana Rojas", "numero": "4242 4242 4242 4242", "vencimiento": "12/28", "cvv": "123" }
+}
+
+### 409: Bruno quiere la misma hora (errores.hora)
+POST {{base}}/api/citas
+Authorization: Bearer {{tokenBruno.response.body.token}}
+Content-Type: application/json
+
+{
+  "servicioCodigo": "CN002", "nutricionistaId": "NUT001", "fecha": "{{fecha}}", "hora": "10:00",
+  "motivo": "Control mensual de peso",
+  "tarjeta": { "titular": "Bruno Díaz", "numero": "4242 4242 4242 4242", "vencimiento": "12/28", "cvv": "123" }
+}
+
+### 402: tarjeta rechazada. El pago RECHAZADO queda guardado; la cita no se crea.
+POST {{base}}/api/citas
+Authorization: Bearer {{tokenBruno.response.body.token}}
+Content-Type: application/json
+
+{
+  "servicioCodigo": "CN002", "nutricionistaId": "NUT001", "fecha": "{{fecha}}", "hora": "11:00",
+  "motivo": "Control mensual de peso",
+  "tarjeta": { "titular": "Bruno Díaz", "numero": "4000 0000 0000 0002", "vencimiento": "12/28", "cvv": "123" }
+}
+
+### 400: tarjeta inválida, un mensaje por campo (errores.titular, numero, vencimiento, cvv)
+POST {{base}}/api/citas
+Authorization: Bearer {{tokenAna.response.body.token}}
+Content-Type: application/json
+
+{
+  "servicioCodigo": "CN002", "nutricionistaId": "NUT001", "fecha": "{{fecha}}", "hora": "12:00",
+  "motivo": "Control mensual de peso",
+  "tarjeta": { "titular": "", "numero": "1234", "vencimiento": "01/20", "cvv": "1" }
+}
+
+### 403: la secretaria no agenda (solo PACIENTE)
+POST {{base}}/api/citas
+Authorization: Bearer {{tokenSecretaria.response.body.token}}
+Content-Type: application/json
+
+{"servicioCodigo":"CN002","nutricionistaId":"NUT001","fecha":"{{fecha}}","hora":"12:00","motivo":"Control mensual de peso",
+ "tarjeta":{"titular":"Marta Soto","numero":"4242424242424242","vencimiento":"12/28","cvv":"123"}}
+
+# ============================================================== consultas por rol
+
+### Mis citas (Ana)
+GET {{base}}/api/citas/mias
+Authorization: Bearer {{tokenAna.response.body.token}}
+
+### Agenda de Carolina (solo NUT001, sale del token)
+GET {{base}}/api/citas/agenda
+Authorization: Bearer {{tokenNutricionista.response.body.token}}
+
+### Búsqueda de la secretaria (todos los filtros son opcionales)
+GET {{base}}/api/citas?nutricionistaId=NUT001&estado=PENDIENTE
+Authorization: Bearer {{tokenSecretaria.response.body.token}}
+
+### 403: Bruno pide la cita de Ana ("Esa cita no es tuya.")
+GET {{base}}/api/citas/{{crear.response.body.id}}
+Authorization: Bearer {{tokenBruno.response.body.token}}
+
+### 200: la secretaria sí la ve
+GET {{base}}/api/citas/{{crear.response.body.id}}
+Authorization: Bearer {{tokenSecretaria.response.body.token}}
+
+### Comprobante de Ana (solo los 4 últimos dígitos)
+GET {{base}}/api/pagos/{{crear.response.body.pagoId}}
+Authorization: Bearer {{tokenAna.response.body.token}}
+
+### 401 sin token (formato de error común)
+GET {{base}}/api/citas/mias
+
+# ============================================================== cambios de estado
+
+### 403: el nutricionista no confirma ("Tu rol no puede hacer ese cambio en la cita.")
+PATCH {{base}}/api/citas/{{crear.response.body.id}}/estado
+Authorization: Bearer {{tokenNutricionista.response.body.token}}
+Content-Type: application/json
+
+{"estado":"CONFIRMADA"}
+
+### 200: la secretaria confirma (queda en el historial)
+PATCH {{base}}/api/citas/{{crear.response.body.id}}/estado
+Authorization: Bearer {{tokenSecretaria.response.body.token}}
+Content-Type: application/json
+
+{"estado":"CONFIRMADA"}
+
+### 200: Ana reprograma a las 15:30 (vuelve a PENDIENTE). Con 24 h o menos sería 409.
+PATCH {{base}}/api/citas/{{crear.response.body.id}}/reprogramar
+Authorization: Bearer {{tokenAna.response.body.token}}
+Content-Type: application/json
+
+{"fecha":"{{fecha}}","hora":"15:30"}
+
+### 200: Ana cancela con más de 24 h; el pago pasa a REEMBOLSADO
+PATCH {{base}}/api/citas/{{crear.response.body.id}}/estado
+Authorization: Bearer {{tokenAna.response.body.token}}
+Content-Type: application/json
+
+{"estado":"CANCELADA"}
+
+### 409: la cita C0003 de las semillas es para mañana: Ana ya no puede cancelarla (24 h)
+PATCH {{base}}/api/citas/C0003/estado
+Authorization: Bearer {{tokenAna.response.body.token}}
+Content-Type: application/json
+
+{"estado":"CANCELADA"}
+
+# ============================================================== admin
+
+### 409: no se elimina una cita que no está cancelada (C0004 está PENDIENTE)
+DELETE {{base}}/api/citas/C0004
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+
+### 204: el admin elimina la cita cancelada (el pago se conserva)
+DELETE {{base}}/api/citas/{{crear.response.body.id}}
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+
+### Pagos (todos, o ?citaIds=C0001,C0003)
+GET {{base}}/api/pagos
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+
+### Estadísticas del período (RN-27)
+GET {{base}}/api/citas/estadisticas?desde=2026-11-01&hasta=2026-11-30
+Authorization: Bearer {{tokenAdmin.response.body.token}}

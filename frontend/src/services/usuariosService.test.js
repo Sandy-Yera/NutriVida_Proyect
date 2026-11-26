@@ -3,11 +3,12 @@ import {
   actualizarUsuario,
   cambiarEstado,
   cambiarRol,
+  eliminarUsuario,
   listarUsuarios,
   obtenerUsuario,
   registrarPaciente,
 } from "./usuariosService.js";
-import { iniciarSesion } from "../auth/auth.js";
+import { cerrarSesion, iniciarSesion } from "../auth/auth.js";
 
 describe("usuariosService", () => {
   it("nunca devuelve la clave de los usuarios", async () => {
@@ -39,5 +40,62 @@ describe("usuariosService", () => {
       },
     );
     await expect(cambiarEstado("U002", false)).resolves.toMatchObject({ activo: false });
+  });
+});
+
+// Preparación EP3: las mismas reglas que tendrá ms-usuarios con @PreAuthorize.
+describe("usuariosService: permisos", () => {
+  it("cada persona edita solo nombre, apellido y teléfono de su propia cuenta", async () => {
+    iniciarSesion("cfuentes@nutrivida.cl", "Nutri2026!"); // U010
+
+    await expect(actualizarUsuario("U010", { telefono: "+56 9 3333 0010" })).resolves.toMatchObject(
+      {
+        telefono: "+56 9 3333 0010",
+      },
+    );
+    await expect(actualizarUsuario("U010", { correo: "otro@nutrivida.cl" })).rejects.toMatchObject({
+      estado: 403,
+      campo: "correo",
+    });
+    await expect(actualizarUsuario("U011", { nombre: "X" })).rejects.toMatchObject({
+      estado: 403,
+    });
+  });
+
+  it("la clave nunca se cambia con actualizarUsuario", async () => {
+    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+    await actualizarUsuario("U100", { clave: "Cualquiera1!" });
+
+    expect(iniciarSesion("javiera.soto@correo.cl", "Paciente2026!").ok).toBe(true);
+  });
+
+  it("solo el administrador desactiva o cambia roles, y sin sesión responde 401", async () => {
+    iniciarSesion("recepcion@nutrivida.cl", "Recepcion2026!");
+    await expect(cambiarEstado("U100", false)).rejects.toMatchObject({ estado: 403 });
+    await expect(cambiarRol("U100", "ADMIN")).rejects.toMatchObject({ estado: 403 });
+    cerrarSesion();
+    await expect(actualizarUsuario("U100", { nombre: "X" })).rejects.toMatchObject({ estado: 401 });
+  });
+});
+
+describe("usuariosService: eliminar (G-33)", () => {
+  it("solo el admin elimina, y solo cuentas desactivadas que no son la suya", async () => {
+    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+
+    await expect(eliminarUsuario("U102")).rejects.toThrow(
+      "Desactiva la cuenta antes de eliminarla.",
+    );
+    await expect(eliminarUsuario("U001")).rejects.toThrow("No puedes eliminar tu propia cuenta.");
+    await cambiarEstado("U102", false);
+    await eliminarUsuario("U102");
+    expect(await obtenerUsuario("U102")).toBeNull();
+  });
+
+  it("otro rol no puede eliminar cuentas", async () => {
+    iniciarSesion("recepcion@nutrivida.cl", "Recepcion2026!");
+
+    await expect(eliminarUsuario("U102")).rejects.toThrow(
+      "Solo el administrador puede hacer esto.",
+    );
   });
 });

@@ -1,6 +1,12 @@
 import { NOMBRE_ROL } from "../../config/roles.js";
 
-export default function TablaUsuarios({ usuarios, idSesion, onEditar, onCambiarEstado }) {
+export default function TablaUsuarios({
+  usuarios,
+  idSesion,
+  onEditar,
+  onCambiarEstado,
+  onEliminar,
+}) {
   return (
     <table className="table align-middle bg-white tabla-lista mb-0">
       <thead>
@@ -60,6 +66,17 @@ export default function TablaUsuarios({ usuarios, idSesion, onEditar, onCambiarE
                 >
                   {usuario.activo ? "Desactivar" : "Activar"}
                 </button>
+                {/* G-33: solo se elimina una cuenta ya desactivada y nunca la propia. */}
+                {onEliminar && !usuario.activo && !esPropio && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger ms-2"
+                    aria-label={`Eliminar a ${nombreCompleto}`}
+                    onClick={() => onEliminar(usuario)}
+                  >
+                    Eliminar
+                  </button>
+                )}
               </td>
             </tr>
           );

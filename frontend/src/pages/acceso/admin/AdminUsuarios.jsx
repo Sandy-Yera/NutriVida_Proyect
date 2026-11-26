@@ -4,7 +4,11 @@ import DialogoConfirmacion from "../../../components/comunes/DialogoConfirmacion
 import FiltroUsuarios from "../../../components/acceso/FiltroUsuarios.jsx";
 import TablaUsuarios from "../../../components/acceso/TablaUsuarios.jsx";
 import { obtenerSesion } from "../../../auth/auth.js";
-import { cambiarEstado, listarUsuarios } from "../../../services/usuariosService.js";
+import {
+  cambiarEstado,
+  eliminarUsuario,
+  listarUsuarios,
+} from "../../../services/usuariosService.js";
 
 const FILTROS_INICIALES = { texto: "", rol: "", estado: "" };
 
@@ -24,6 +28,7 @@ export default function AdminUsuarios() {
   const [usuarios, setUsuarios] = useState(null);
   const [version, setVersion] = useState(0);
   const [pendiente, setPendiente] = useState(null);
+  const [porEliminar, setPorEliminar] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState(() =>
     location.state?.mensaje ? { tipo: "exito", texto: location.state.mensaje } : null,
@@ -57,6 +62,21 @@ export default function AdminUsuarios() {
     }
   }
 
+  async function confirmarEliminacion() {
+    const nombreCompleto = `${porEliminar.nombre} ${porEliminar.apellido}`;
+    setProcesando(true);
+    try {
+      await eliminarUsuario(porEliminar.id);
+      setAviso({ tipo: "exito", texto: `Cuenta de ${nombreCompleto} eliminada.` });
+      setVersion((anterior) => anterior + 1);
+    } catch (error) {
+      setAviso({ tipo: "error", texto: error.message });
+    } finally {
+      setProcesando(false);
+      setPorEliminar(null);
+    }
+  }
+
   function contenido() {
     if (usuarios === null) {
       return <p role="status">Cargando usuarios...</p>;
@@ -85,6 +105,7 @@ export default function AdminUsuarios() {
           idSesion={sesion?.id}
           onEditar={(usuario) => navigate(`/admin/usuarios/${usuario.id}`)}
           onCambiarEstado={setPendiente}
+          onEliminar={setPorEliminar}
         />
       </>
     );
@@ -122,6 +143,17 @@ export default function AdminUsuarios() {
           procesando={procesando}
           onConfirmar={confirmarCambioEstado}
           onCancelar={() => setPendiente(null)}
+        />
+      )}
+      {porEliminar && (
+        <DialogoConfirmacion
+          titulo="Eliminar cuenta"
+          mensaje={`La cuenta de ${porEliminar.nombre} ${porEliminar.apellido} se borrará y no se puede deshacer.`}
+          textoConfirmar="Eliminar"
+          variante="danger"
+          procesando={procesando}
+          onConfirmar={confirmarEliminacion}
+          onCancelar={() => setPorEliminar(null)}
         />
       )}
     </section>

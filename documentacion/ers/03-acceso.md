@@ -1,6 +1,6 @@
 # 3. Módulo de acceso y administración
 
-Responsable: Gabriel. Tareas G-00 a G-11 del plan del proyecto. ERS V2 (EP2, frontend React con datos simulados).
+Responsable: Gabriel. Tareas G-00 a G-11 (EP2) y G-31 a G-36 (EP3) del plan del proyecto. **ERS V3** (EP3: el frontend de EP2 más el microservicio ms-usuarios con Spring Boot y MySQL). Las secciones 3.1 a 3.9 son las de la V2 y siguen vigentes, salvo lo que corrige la sección 3.10. Lo que agrega la V3 está en las secciones 3.10 a 3.15.
 
 ## 3.1 Alcance
 
@@ -238,3 +238,109 @@ Usuarios de demostración, uno o más por rol. Los RUT son ficticios y solo cump
 | Secretaria | recepcion@nutrivida.cl | Recepcion2026! |
 | Nutricionista | cfuentes@nutrivida.cl, rsepulveda@nutrivida.cl, dmorales@nutrivida.cl, faraya@nutrivida.cl | Nutri2026! |
 | Paciente | javiera.soto@correo.cl, tomas.h@correo.cl, ana.perez@correo.cl | Paciente2026! |
+
+## 3.10 Versión 3 (EP3): ms-usuarios
+
+En EP3 las cuentas, las contraseñas y la sesión pasan del navegador a **ms-usuarios**, un microservicio Spring Boot en el puerto 8081 con su propio esquema MySQL, `nutrivida_usuarios`. Las pantallas de 3.3 no cambian: con `VITE_API_MODE=api`, `auth.js`, `usuariosService` y `articulosService` llaman a la API en vez de a `data/` (modo dual). El detalle de la integración está en `documentacion/integracion-ep3.md` §8 y el manual con capturas en `documentacion/capturas/manual-acceso.md`.
+
+```text
+React (:8080) → Nginx → ms-usuarios (:8081) → MySQL nutrivida_usuarios
+                             └─ emite el JWT que validan ms-citas (:8082) y ms-clinica (:8083)
+```
+
+Cambios sobre la V2:
+
+- **RF-ACC-01:** la contraseña se compara con BCrypt en el servidor y el login devuelve un JWT de 8 h. La sesión del navegador guarda el token (`tokenSesion`) y los mismos 4 datos de antes (`usuarioActual`).
+- **RF-ACC-03:** cerrar sesión también borra el token.
+- **RF-ACC-04:** las reglas por rol se repiten en el servidor con `@PreAuthorize`. Ya no se pueden saltar editando el `localStorage`.
+- **3.5:** `auth.js` suma `ingresar` y `verificarSesion`, y `usuariosService` suma `eliminarUsuario`. La clave se cambia con `PUT /api/usuarios/{id}/clave` (no `/me/clave`).
+- **RF-ACC-07:** el administrador ahora puede **eliminar** una cuenta, pero solo si ya está desactivada (decisión 8.5.1 de `integracion-ep3.md`). Las cuentas activas se siguen desactivando, no borrando.
+
+## 3.11 Requisitos funcionales del backend
+
+### RF-ACC-10 Emitir el JWT al iniciar sesión
+
+- **Endpoint:** `POST /api/auth/login` (público) con `{ correo, clave }`.
+- **Reglas:** correo sin mayúsculas ni espacios; clave con BCrypt. El token lleva `sub`, `rol`, `nombre` y `nutricionistaId` (solo nutricionistas), dura 8 h y se firma con `JWT_SECRET`, el mismo en los 3 microservicios. Algoritmo: decisión 8.4 de `integracion-ep3.md`.
+- **Respuestas:** 200 `{ token, tipo, expiraEn, usuario }` · 400 si falta un campo · 401 "Correo o contraseña incorrectos." (igual si el correo no existe) · 403 "Tu cuenta está desactivada. Contacta a la clínica.".
+- **Criterio de aceptación:** las 4 cuentas demo reciben su token; U103 recibe 403.
+- **Pruebas:** `ApiAuthTest`, `AuthServiceTest` (Mockito) y `MatrizSeguridadTest`.
+
+### RF-ACC-11 Registrar pacientes en el servidor
+
+- **Endpoint:** `POST /api/auth/registro` (público).
+- **Reglas:** las mismas de RF-ACC-02, repetidas en Java (`RegistroSolicitud` y `ReglasUsuario`). Siempre crea un PACIENTE activo, aunque el cuerpo traiga otro rol. ID correlativo con la fila del contador bloqueada (`U104`, `U105`…).
+- **Respuestas:** 201 con `Location` · 400 con `errores` por campo · 409 con `errores.correo` o `errores.rut`.
+- **Pruebas:** `ApiAuthTest` y `ReglasUsuarioTest`.
+
+### RF-ACC-12 Confirmar la sesión al recargar
+
+- **Endpoint:** `GET /api/auth/me` (con token).
+- **Reglas:** lee la cuenta de la base, no solo del token. Si la desactivaron o la borraron responde 401 y el frontend cierra la sesión. El frontend lo llama al montar los layouts (primera carga y F5).
+- **Respuestas:** 200 · 401 (sin token, token vencido, firma inválida o cuenta desactivada; el mensaje dice cuál).
+- **Pruebas:** `ApiAuthTest` y `accesoApi.test.js`.
+
+### RF-ACC-13 Consultar cuentas según el rol
+
+- **Endpoints:** `GET /api/usuarios?rol&activo&texto` y `GET /api/usuarios/{id}`.
+- **Reglas:** cada uno lee su propia cuenta; secretaria y administrador, cualquiera; el nutricionista, solo pacientes. ms-citas lee `{ id, activo }` con el token del propio usuario para saber si la cuenta sigue activa.
+- **Respuestas:** 200 · 403 · 404 "El usuario no existe.".
+- **Pruebas:** `ApiUsuariosTest` y `MatrizSeguridadTest`.
+
+### RF-ACC-14 Administrar cuentas en el servidor
+
+- **Endpoints:** `POST /api/usuarios`, `PATCH /api/usuarios/{id}`, `PATCH /{id}/estado`, `PATCH /{id}/rol`, `DELETE /{id}` (ADMIN) y `PUT /{id}/clave` (el propio usuario).
+- **Reglas:** las de RF-ACC-05 y RF-ACC-07: correo, RUT y nutricionista únicos (409 en el campo); el administrador no se desactiva, no cambia su rol ni se elimina (403); el resto de los roles solo cambia nombre, apellido y teléfono de su cuenta; la clave nueva exige la actual. `DELETE` solo para cuentas desactivadas (409 si está activa).
+- **Respuestas:** 201 · 200 · 204 · 400 · 403 · 404 · 409.
+- **Pruebas:** `ApiUsuariosTest`, `MatrizSeguridadTest` y `AdminUsuarios.test.jsx`.
+
+### RF-ACC-15 Consejos desde la API
+
+- **Endpoints:** `GET /api/articulos` y `GET /api/articulos/{id}` (públicos).
+- **Reglas:** del más reciente al más antiguo; un id inexistente responde 404 y la página muestra "El consejo que buscas no existe.".
+- **Pruebas:** `ApiUsuariosTest` y `accesoApi.test.js`.
+
+## 3.12 Datos en MySQL (`database/01_usuarios.sql`)
+
+| Tabla | Campos principales | Restricciones |
+| --- | --- | --- |
+| `usuario` | id, nombre, apellido, rut, correo, telefono, fecha_nacimiento, clave, rol, nutricionista_id, activo, creado_en | `UNIQUE` en correo, RUT y nutricionista_id; `CHECK` de rol y de RN-30 (solo un NUTRICIONISTA lleva nutricionista_id); `clave` es el hash BCrypt de 60 caracteres |
+| `articulo` | id, titulo, resumen, contenido, autor_nutricionista_id, fecha | Solo lectura |
+| `contador` | nombre, ultimo | IDs con el formato de EP2 sin repetir |
+
+- `nutricionista_id` y `autor_nutricionista_id` apuntan a `nutrivida_clinica` por valor, **sin claves foráneas entre esquemas**.
+- Hibernate arranca con `ddl-auto=validate`: si una entidad y una tabla no calzan, ms-usuarios no arranca.
+- En H2 (perfil por defecto y pruebas) `SemillasH2` carga las mismas cuentas.
+
+## 3.13 Requisitos no funcionales del backend
+
+- **Seguridad:** contraseñas con BCrypt, nunca en las respuestas. JWT de 8 h. Rol con `@PreAuthorize` en cada endpoint y reglas de dueño en `UsuarioService`. Una cuenta desactivada no inicia sesión y pierde el acceso en ms-citas aunque su token siga vigente.
+- **Integridad:** cada operación que revisa una regla y escribe es un `@Transactional`. La base es la última barrera (`UNIQUE`, `CHECK`).
+- **Errores:** todo error responde con el JSON común `timestamp, status, error, mensaje, ruta, errores`, también los 401 y 403 de Spring Security.
+- **Documentación:** Swagger en `http://localhost:8081/swagger-ui.html`, con la tabla de cuentas demo, el botón Authorize y ejemplos de respuesta (200, 400, 401, 403, 409).
+- **Frontend:** una recarga (F5) mantiene la sesión y la confirma con `/api/auth/me`. Un 401 lleva a `/login` con el aviso; un 403 avisa sin cerrar la sesión.
+
+## 3.14 Registro de pruebas del backend
+
+78 pruebas JUnit en `backend/ms-usuarios/src/test/java` y 20 pruebas nuevas de Vitest para el modo API.
+
+| Nivel | Clases | Qué verifican | Mock o spy |
+| --- | --- | --- | --- |
+| Reglas puras | `ReglasUsuarioTest` (6) | RUT con dígito verificador (espejo de `validaciones.test.js`), teléfono, correo y búsqueda sin tildes | No |
+| Repositorio | `UsuarioRepositoryTest` (6) | Semillas de EP2, hash BCrypt, orden de los consejos y `UNIQUE` de correo y RUT sobre H2 | No |
+| Service | `AuthServiceTest` (3) | Login correcto, clave incorrecta y cuenta desactivada sin emitir token | **Mockito** (repositorio, BCrypt y `JwtService`) |
+| API | `ApiAuthTest` (13), `ApiUsuariosTest` (18) | Login, registro, `/me` (token vencido e inválido), lectura por dueño, CRUD del admin, cuenta propia, clave, eliminar y consejos | No: JWT reales y seguridad activa |
+| Seguridad | `MatrizSeguridadTest` (31) | Matriz de 28 filas 401/403/200/201/204 con anónimo, token vencido y los 4 roles, más el formato de los 401, 403, 400 y 405 | No |
+| Documentación | `SwaggerTest` (1) | `/v3/api-docs` público, esquema bearer y ejemplos | No |
+| Frontend | `services/accesoApi.test.js` (20), `AdminUsuarios.test.jsx` | Login real, token vencido, F5 con `/me`, 401 y 403, rutas de `usuariosService` y `articulosService`, botón Eliminar | `fetch` simulado con `vi.stubGlobal`; `vi.mock` del service |
+
+## 3.15 Trazabilidad del backend
+
+| Requisito | Endpoints | Clases | Pruebas |
+| --- | --- | --- | --- |
+| RF-ACC-10 | `POST /api/auth/login` | `AuthController`, `AuthService.login`, `JwtService` | `ApiAuthTest`, `AuthServiceTest`, `MatrizSeguridadTest` |
+| RF-ACC-11 | `POST /api/auth/registro` | `AuthController`, `UsuarioService.registrarPaciente`, `ReglasUsuario`, `ContadorRepository` | `ApiAuthTest`, `ReglasUsuarioTest` |
+| RF-ACC-12 | `GET /api/auth/me` | `AuthService.yo`, `useVerificarSesion`, `auth.verificarSesion` | `ApiAuthTest`, `accesoApi.test.js` |
+| RF-ACC-13 | `GET /api/usuarios`, `/{id}` | `UsuarioController`, `UsuarioService.listar`, `obtener` | `ApiUsuariosTest`, `MatrizSeguridadTest` |
+| RF-ACC-14 | `POST`, `PATCH`, `DELETE /api/usuarios…`, `PUT /{id}/clave` | `UsuarioService` | `ApiUsuariosTest`, `MatrizSeguridadTest`, `AdminUsuarios.test.jsx` |
+| RF-ACC-15 | `GET /api/articulos`, `/{id}` | `ArticuloController`, `ArticuloService` | `ApiUsuariosTest`, `accesoApi.test.js` |

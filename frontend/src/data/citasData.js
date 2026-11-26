@@ -2,6 +2,12 @@ import { guardar, leer } from "./almacen.js";
 import { citasSemilla } from "./semillas/citas.js";
 import { aFechaIso } from "../utils/formato.js";
 import { chocaConOtraCita, puedeTransicionar, validarMotivo } from "../utils/citas.js";
+import {
+  errorConflicto,
+  errorDeCampo,
+  errorNoEncontrado,
+  errorValidacion,
+} from "../utils/errores.js";
 
 const CLAVE = "nv_citas";
 const FORMATO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
@@ -14,28 +20,28 @@ function siguienteId(citas) {
 
 function buscarIndice(citas, id) {
   const indice = citas.findIndex((c) => c.id === id);
-  if (indice === -1) throw new Error(`La cita ${id} no existe.`);
+  if (indice === -1) throw errorNoEncontrado(`La cita ${id} no existe.`);
   return indice;
 }
 
 function validarFechaHora(fecha, hora) {
   if (!FORMATO_FECHA.test(String(fecha ?? ""))) {
-    throw new Error("La fecha de la cita debe tener el formato AAAA-MM-DD.");
+    throw errorDeCampo("fecha", "La fecha de la cita debe tener el formato AAAA-MM-DD.");
   }
   if (!FORMATO_HORA.test(String(hora ?? ""))) {
-    throw new Error("La hora de la cita debe tener el formato HH:mm.");
+    throw errorDeCampo("hora", "La hora de la cita debe tener el formato HH:mm.");
   }
 }
 
 // RN-14: la regla vive en utils (la usa también el asistente); aquí se convierte en Error.
 function exigirMotivo(motivo) {
   const error = validarMotivo(motivo);
-  if (error) throw new Error(error);
+  if (error) throw errorDeCampo("motivo", error);
 }
 
 function validarHorarioLibre(citas, cita, idExcluido = null) {
   if (chocaConOtraCita(citas, cita, idExcluido)) {
-    throw new Error("Ese horario ya está tomado. Elige otra hora.");
+    throw errorConflicto("Ese horario ya está tomado. Elige otra hora.", { campo: "hora" });
   }
 }
 
@@ -66,7 +72,7 @@ export function obtener(id) {
 // RN-03: toda cita nace PENDIENTE. RN-10: no puede ocupar un horario ya tomado. RN-14: motivo.
 export function crear(datos) {
   if (!datos.pacienteId || !datos.nutricionistaId || !datos.servicioCodigo) {
-    throw new Error("Faltan datos de la cita: paciente, nutricionista y servicio.");
+    throw errorValidacion("Faltan datos de la cita: paciente, nutricionista y servicio.");
   }
   validarFechaHora(datos.fecha, datos.hora);
   exigirMotivo(datos.motivo);
@@ -96,7 +102,7 @@ export function cambiarEstado(id, nuevoEstado, usuarioId) {
   const indice = buscarIndice(citas, id);
   const cita = citas[indice];
   if (!puedeTransicionar(cita.estado, nuevoEstado)) {
-    throw new Error(
+    throw errorConflicto(
       `No se puede pasar una cita ${cita.estado.toLowerCase()} a ${String(nuevoEstado).toLowerCase()}.`,
     );
   }
@@ -114,7 +120,7 @@ export function reprogramar(id, fecha, hora, usuarioId) {
   const indice = buscarIndice(citas, id);
   const cita = citas[indice];
   if (!["PENDIENTE", "CONFIRMADA"].includes(cita.estado)) {
-    throw new Error("Solo se puede reprogramar una cita pendiente o confirmada.");
+    throw errorConflicto("Solo se puede reprogramar una cita pendiente o confirmada.");
   }
   validarHorarioLibre(citas, { ...cita, fecha, hora }, id);
   return reemplazar(citas, indice, {
@@ -129,10 +135,10 @@ export function reprogramar(id, fecha, hora, usuarioId) {
 // Para campos que no son de agenda (motivo, pagoId). El estado tiene sus propias operaciones.
 export function actualizar(id, cambios) {
   if ("estado" in cambios || "historial" in cambios) {
-    throw new Error("El estado de una cita se cambia con cambiarEstado o reprogramar.");
+    throw errorValidacion("El estado de una cita se cambia con cambiarEstado o reprogramar.");
   }
   if ("fecha" in cambios || "hora" in cambios) {
-    throw new Error("La fecha y la hora de una cita se cambian con reprogramar.");
+    throw errorValidacion("La fecha y la hora de una cita se cambian con reprogramar.");
   }
   const citas = leer(CLAVE, citasSemilla);
   const indice = buscarIndice(citas, id);

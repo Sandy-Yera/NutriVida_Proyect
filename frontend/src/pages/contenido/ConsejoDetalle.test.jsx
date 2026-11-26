@@ -17,8 +17,9 @@ describe("ConsejoDetalle", () => {
   it("lee el id con useParams y muestra el consejo con la invitación a agendar con su autora", async () => {
     renderizarEn("/consejos/colaciones-jornada-laboral");
 
+    // El consejo llega desde articulosService (async), por eso se espera con findBy.
     expect(
-      screen.getByRole("heading", { level: 1, name: "Colaciones para la jornada laboral" }),
+      await screen.findByRole("heading", { level: 1, name: "Colaciones para la jornada laboral" }),
     ).toBeInTheDocument();
     expect(await screen.findByText(/Por Daniela Morales C\./)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Solicitar cita con Daniela" })).toHaveAttribute(
@@ -27,10 +28,10 @@ describe("ConsejoDetalle", () => {
     );
   });
 
-  it("con un id que no existe muestra el aviso y el enlace a la lista", () => {
+  it("con un id que no existe muestra el aviso y el enlace a la lista", async () => {
     renderizarEn("/consejos/no-existe");
 
-    expect(screen.getByText("El consejo que buscas no existe.")).toBeInTheDocument();
+    expect(await screen.findByText("El consejo que buscas no existe.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ver todos los consejos" })).toHaveAttribute(
       "href",
       "/consejos",

@@ -120,33 +120,109 @@ describe("citasService: cambiarEstado", () => {
   });
 });
 
+// Preparación EP3: el service revisa quién hace el cambio, como lo hará el microservicio con el JWT.
+describe("citasService: permisos por rol (RN-06, RN-24 a RN-26)", () => {
+  it("sin un usuario válido responde 401 y no toca la cita", async () => {
+    await expect(cambiarEstado("C0004", "CONFIRMADA")).rejects.toMatchObject({ estado: 401 });
+    await expect(cambiarEstado("C0004", "CONFIRMADA", "U999")).rejects.toMatchObject({
+      estado: 401,
+    });
+    expect((await obtenerCita("C0004")).estado).toBe("PENDIENTE");
+  });
+
+  it("un paciente no cancela la cita de otro paciente (403)", async () => {
+    await expect(cambiarEstado("C0004", "CANCELADA", "U100")).rejects.toMatchObject({
+      estado: 403,
+      message: "Esa cita no es tuya.",
+    });
+  });
+
+  it("un paciente no puede confirmar su propia cita (403)", async () => {
+    await expect(cambiarEstado("C0004", "CONFIRMADA", "U102")).rejects.toMatchObject({
+      estado: 403,
+    });
+  });
+
+  it("un nutricionista solo marca citas de su agenda y no las confirma", async () => {
+    // C0003 es de Carolina (NUT001): Daniela (U012) no puede marcarla.
+    await expect(cambiarEstado("C0003", "ATENDIDA", "U012")).rejects.toMatchObject({
+      estado: 403,
+    });
+    // C0004 es de Daniela, pero confirmar es de la secretaria.
+    await expect(cambiarEstado("C0004", "CONFIRMADA", "U012")).rejects.toMatchObject({
+      estado: 403,
+    });
+  });
+
+  it("la secretaria no marca una cita como atendida (RN-26)", async () => {
+    await cambiarEstado("C0004", "CONFIRMADA", "U002");
+    await expect(cambiarEstado("C0004", "ATENDIDA", "U002")).rejects.toMatchObject({
+      estado: 403,
+    });
+  });
+
+  it("un paciente no cancela con 24 h o menos, aunque llame al service directo (409)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const cita = await obtenerCita("C0004");
+    const [anio, mes, dia] = cita.fecha.split("-").map(Number);
+    vi.setSystemTime(new Date(anio, mes - 1, dia - 1, 9, 0)); // el día anterior, 23,5 h antes
+
+    await expect(cambiarEstado("C0004", "CANCELADA", "U102")).rejects.toMatchObject({
+      estado: 409,
+    });
+    expect(obtenerPago("P0004").estado).toBe("APROBADO");
+  });
+
+  it("los errores traen el código HTTP: 404 si no existe, 409 si la transición no corre", async () => {
+    await expect(cambiarEstado("C9999", "CONFIRMADA", "U002")).rejects.toMatchObject({
+      estado: 404,
+      codigo: "NO_ENCONTRADO",
+    });
+    await expect(cambiarEstado("C0001", "CANCELADA", "U002")).rejects.toMatchObject({
+      estado: 409,
+    });
+  });
+});
+
 describe("citasService: reprogramarCita", () => {
   // Hoy fingido: lunes 28 de enero de 2030. El 1 de febrero (viernes) atiende Carolina (NUT001).
   beforeEach(() => fijarReloj(2030, 1, 28));
 
+  // La semilla queda en el pasado respecto de este reloj: reprograma la secretaria (U002),
+  // que no tiene la regla de 24 h del paciente (RN-06).
   it("mueve la cita, la deja PENDIENTE y anota quién la reprogramó", async () => {
-    const cita = await reprogramarCita("C0003", "2030-02-01", "11:30", "U100");
+    const cita = await reprogramarCita("C0003", "2030-02-01", "11:30", "U002");
 
     expect(cita).toMatchObject({ fecha: "2030-02-01", hora: "11:30", estado: "PENDIENTE" });
-    expect(cita.historial.at(-1)).toMatchObject({ de: "CONFIRMADA", a: "PENDIENTE", por: "U100" });
+    expect(cita.historial.at(-1)).toMatchObject({ de: "CONFIRMADA", a: "PENDIENTE", por: "U002" });
   });
 
   it("no mueve la cita fuera de la jornada ni más allá de 60 días (RN-09, RN-13)", async () => {
-    await expect(reprogramarCita("C0003", "2030-02-01", "18:00", "U100")).rejects.toThrow(
+    await expect(reprogramarCita("C0003", "2030-02-01", "18:00", "U002")).rejects.toThrow(
       "no está disponible",
     );
-    await expect(reprogramarCita("C0003", "2030-04-05", "11:30", "U100")).rejects.toThrow(
+    await expect(reprogramarCita("C0003", "2030-04-05", "11:30", "U002")).rejects.toThrow(
       "60 días",
     );
     expect((await obtenerCita("C0003")).estado).toBe("CONFIRMADA");
   });
 
   it("no reprograma una cita cancelada", async () => {
-    await cambiarEstado("C0005", "CANCELADA", "U101");
+    await cambiarEstado("C0005", "CANCELADA", "U002");
 
-    await expect(reprogramarCita("C0005", "2030-02-01", "11:30", "U101")).rejects.toThrow(
+    await expect(reprogramarCita("C0005", "2030-02-01", "11:30", "U002")).rejects.toThrow(
       "Solo se puede reprogramar",
     );
+  });
+
+  it("el nutricionista no reprograma y el paciente no lo hace con menos de 24 h", async () => {
+    await expect(reprogramarCita("C0004", "2030-02-01", "11:30", "U012")).rejects.toMatchObject({
+      estado: 403,
+    });
+    // Con este reloj la cita C0003 de Javiera ya pasó: no cumple las 24 h.
+    await expect(reprogramarCita("C0003", "2030-02-01", "11:30", "U100")).rejects.toMatchObject({
+      estado: 409,
+    });
   });
 });
 
@@ -443,5 +519,34 @@ describe("citasService: puedeAgendarTeleconsulta (RN-16)", () => {
     await cambiarEstado(tele.id, "ATENDIDA", "U012");
 
     expect(await puedeAgendarTeleconsulta("U102")).toBe(false);
+  });
+});
+
+describe("citasService: integridad al crear la cita", () => {
+  beforeEach(() => fijarReloj(2030, 1, 6));
+
+  it("dos solicitudes simultáneas con el mismo pago crean una sola cita", async () => {
+    const pago = crearPago({ monto: 25000, ultimos4: "4242", estado: "APROBADO" });
+    const base = {
+      pacienteId: "U102",
+      nutricionistaId: "NUT003",
+      servicioCodigo: "CN002",
+      fecha: "2030-01-08",
+      motivo: "Control mensual de peso",
+      pagoId: pago.id,
+    };
+
+    const resultados = await Promise.allSettled([
+      crearCita({ ...base, hora: "09:00" }),
+      crearCita({ ...base, hora: "10:00" }),
+    ]);
+
+    expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(resultados.find((r) => r.status === "rejected").reason.message).toBe(
+      "Ese pago ya está asociado a otra cita.",
+    );
+    expect(
+      (await listarCitas({ pacienteId: "U102" })).filter((c) => c.pagoId === pago.id),
+    ).toHaveLength(1);
   });
 });

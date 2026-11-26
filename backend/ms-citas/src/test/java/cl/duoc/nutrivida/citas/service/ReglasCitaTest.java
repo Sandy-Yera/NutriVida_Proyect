@@ -1,0 +1,623 @@
+package cl.duoc.nutrivida.citas.service;
+
+import static cl.duoc.nutrivida.citas.model.EstadoCita.ATENDIDA;
+import static cl.duoc.nutrivida.citas.model.EstadoCita.CANCELADA;
+import static cl.duoc.nutrivida.citas.model.EstadoCita.CONFIRMADA;
+import static cl.duoc.nutrivida.citas.model.EstadoCita.INASISTENCIA;
+import static cl.duoc.nutrivida.citas.model.EstadoCita.PENDIENTE;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import cl.duoc.nutrivida.citas.dto.Estadisticas;
+import cl.duoc.nutrivida.citas.dto.HoraLibre;
+import cl.duoc.nutrivida.citas.dto.HorarioNutricionista;
+import cl.duoc.nutrivida.citas.model.Cita;
+import cl.duoc.nutrivida.citas.model.EstadoCita;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+/**
+ * R5: las reglas de citas en Java. Cada caso repite uno de frontend/src/utils/citas.test.js (EP2),
+ * con los mismos horarios, fechas y resultados: si el frontend y el backend se contradijeran,
+ * alguna de las dos suites fallaría. Al final, casos propios de Java (zona horaria y roles).
+ */
+class ReglasCitaTest {
+
+    // Horarios del catálogo (hoja "Nutricionistas"). 2026-10-12 es lunes.
+    static final HorarioNutricionista DANIELA = new HorarioNutricionista("NUT003", List.of(1, 2, 3, 4, 5), t("08:00"), t("13:00"));
+    static final HorarioNutricionista RODRIGO = new HorarioNutricionista("NUT002", List.of(2, 4, 6), t("09:00"), t("14:00"));
+    static final HorarioNutricionista CAROLINA = new HorarioNutricionista("NUT001", List.of(1, 3, 5), t("09:00"), t("17:00"));
+    static final LocalDate LUNES = LocalDate.of(2026, 10, 12);
+    static final List<String> IDS = List.of("NUT001", "NUT002", "NUT003", "NUT004");
+
+    static LocalTime t(String hora) { return LocalTime.parse(hora); }
+
+    static List<LocalTime> horas(String... horas) {
+        return java.util.Arrays.stream(horas).map(LocalTime::parse).toList();
+    }
+
+    static Cita cita(String id, String nutricionistaId, LocalDate fecha, String hora, Integer duracion,
+            EstadoCita estado) {
+        return new Cita(id, "U100", nutricionistaId, "CN002", fecha, t(hora), duracion,
+                "Control mensual de peso", estado, null, fecha);
+    }
+
+    static Cita cita(String id, String nutricionistaId, String fecha, EstadoCita estado) {
+        return cita(id, nutricionistaId, LocalDate.parse(fecha), "10:00", 30, estado);
+    }
+
+    static Cita conServicio(EstadoCita estado, String servicio) {
+        Cita c = cita("C1", "NUT001", LUNES, "10:00", 30, estado);
+        c.setServicioCodigo(servicio);
+        return c;
+    }
+
+    @Nested
+    @DisplayName("generarBloques (RN-09)")
+    class GenerarBloques {
+        @Test
+        @DisplayName("S-T1: Daniela Morales un lunes da 10 bloques de 08:00 a 12:30")
+        void daniela() {
+            List<LocalTime> bloques = ReglasCita.generarBloques(DANIELA, LUNES);
+            assertThat(bloques).hasSize(10);
+            assertThat(bloques.getFirst()).isEqualTo(t("08:00"));
+            assertThat(bloques.getLast()).isEqualTo(t("12:30"));
+        }
+
+        @Test
+        @DisplayName("S-T1: Rodrigo Sepúlveda un lunes no atiende y devuelve una lista vacía")
+        void rodrigoNoAtiende() {
+            assertThat(ReglasCita.generarBloques(RODRIGO, LUNES)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Carolina Fuentes un lunes da 16 bloques hasta las 16:30")
+        void carolina() {
+            List<LocalTime> bloques = ReglasCita.generarBloques(CAROLINA, LUNES);
+            assertThat(bloques).hasSize(16);
+            assertThat(bloques.getLast()).isEqualTo(t("16:30"));
+        }
+
+        @Test
+        @DisplayName("el sábado es 6 y el domingo es 0, como en EP2 y ms-clinica")
+        void convencionDeDias() {
+            assertThat(ReglasCita.diaEp2(LocalDate.of(2026, 10, 17))).isEqualTo(6);
+            assertThat(ReglasCita.diaEp2(LocalDate.of(2026, 10, 18))).isZero();
+            assertThat(ReglasCita.generarBloques(RODRIGO, LocalDate.of(2026, 10, 17))).hasSize(10);
+        }
+
+        @Test
+        @DisplayName("una jornada con medias horas (08:30 a 10:15) da los bloques que caben completos")
+        void mediasHoras() {
+            HorarioNutricionista corta = new HorarioNutricionista("NUT009", List.of(1), t("08:30"), t("10:15"));
+            assertThat(ReglasCita.generarBloques(corta, LUNES)).isEqualTo(horas("08:30", "09:00", "09:30"));
+        }
+
+        @Test
+        @DisplayName("una jornada más corta que un bloque, o al revés, no da bloques")
+        void jornadaSinBloques() {
+            assertThat(ReglasCita.generarBloques(new HorarioNutricionista("X", List.of(1), t("09:00"), t("09:20")), LUNES)).isEmpty();
+            assertThat(ReglasCita.generarBloques(new HorarioNutricionista("X", List.of(1), t("10:00"), t("09:00")), LUNES)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("puedeTransicionar (RN-02)")
+    class PuedeTransicionar {
+        @Test
+        @DisplayName("S-T2: permite PENDIENTE a CONFIRMADA y bloquea ATENDIDA a CANCELADA")
+        void basico() {
+            assertThat(ReglasCita.puedeTransicionar(PENDIENTE, CONFIRMADA)).isTrue();
+            assertThat(ReglasCita.puedeTransicionar(ATENDIDA, CANCELADA)).isFalse();
+        }
+
+        @Test
+        @DisplayName("los estados finales no pasan a ningún otro y un estado nulo no transiciona")
+        void finales() {
+            for (EstadoCita fin : List.of(ATENDIDA, CANCELADA, INASISTENCIA)) {
+                assertThat(ReglasCita.transicionesDesde(fin)).isEmpty();
+            }
+            assertThat(ReglasCita.puedeTransicionar(null, CONFIRMADA)).isFalse();
+        }
+
+        @Test
+        @DisplayName("la tabla completa: PENDIENTE y CONFIRMADA son los únicos que avanzan")
+        void tablaCompleta() {
+            assertThat(ReglasCita.transicionesDesde(PENDIENTE)).containsExactlyInAnyOrder(CONFIRMADA, CANCELADA);
+            assertThat(ReglasCita.transicionesDesde(CONFIRMADA)).containsExactlyInAnyOrder(ATENDIDA, INASISTENCIA, CANCELADA);
+            assertThat(ReglasCita.puedeTransicionar(PENDIENTE, ATENDIDA)).isFalse();
+            assertThat(ReglasCita.puedeTransicionar(PENDIENTE, null)).isFalse();
+        }
+
+        @Test
+        @DisplayName("ocupaAgenda (RN-10): solo PENDIENTE y CONFIRMADA, justo los estados que aún pueden avanzar")
+        void ocupaAgenda() {
+            for (EstadoCita estado : EstadoCita.values()) {
+                assertThat(estado.ocupaAgenda()).as(estado.name())
+                        .isEqualTo(!ReglasCita.transicionesDesde(estado).isEmpty());
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("bloquesQueOcupa (RN-11)")
+    class BloquesQueOcupa {
+        @Test
+        @DisplayName("una cita de 50 min ocupa dos bloques y una de 20 min ocupa uno")
+        void porDuracion() {
+            assertThat(ReglasCita.bloquesQueOcupa(t("08:30"), 50)).isEqualTo(horas("08:30", "09:00"));
+            assertThat(ReglasCita.bloquesQueOcupa(t("08:30"), 20)).isEqualTo(horas("08:30"));
+        }
+
+        @Test
+        @DisplayName("un plan sin duración ocupa un bloque")
+        void plan() {
+            assertThat(ReglasCita.bloquesQueOcupa(t("10:00"), null)).isEqualTo(horas("10:00"));
+        }
+
+        @Test
+        @DisplayName("redondea hacia arriba justo en los bordes: 30 → 1, 31 → 2, 60 → 2, 61 → 3, 120 → 4")
+        void bordes() {
+            assertThat(ReglasCita.bloquesQueOcupa(t("09:00"), 30)).hasSize(1);
+            assertThat(ReglasCita.bloquesQueOcupa(t("09:00"), 31)).hasSize(2);
+            assertThat(ReglasCita.bloquesQueOcupa(t("09:00"), 60)).hasSize(2);
+            assertThat(ReglasCita.bloquesQueOcupa(t("09:00"), 61)).isEqualTo(horas("09:00", "09:30", "10:00"));
+            assertThat(ReglasCita.bloquesQueOcupa(t("14:00"), 120)).isEqualTo(horas("14:00", "14:30", "15:00", "15:30"));
+        }
+
+        @Test
+        @DisplayName("una duración 0 o negativa (dato roto) ocupa igual un bloque, no cero")
+        void duracionInvalida() {
+            assertThat(ReglasCita.bloquesQueOcupa(t("09:00"), 0)).isEqualTo(horas("09:00"));
+            assertThat(ReglasCita.bloquesQueOcupa(t("09:00"), -45)).isEqualTo(horas("09:00"));
+        }
+    }
+
+    @Nested
+    @DisplayName("horariosDisponibles (RN-10 a RN-12)")
+    class HorariosDisponibles {
+        // Daniela tiene una primera consulta (50 min) pendiente a las 08:30, que ocupa 08:30 y 09:00.
+        final List<Cita> citas = List.of(
+                cita("C1", "NUT003", LUNES, "08:30", 50, PENDIENTE),
+                cita("C2", "NUT003", LocalDate.of(2026, 10, 13), "10:00", 30, CONFIRMADA),
+                cita("C3", "NUT001", LUNES, "11:00", 30, CONFIRMADA),
+                cita("C4", "NUT003", LUNES, "12:00", 30, CANCELADA));
+
+        @Test
+        @DisplayName("quita los bloques ocupados y no considera otras fechas, otros nutricionistas ni citas canceladas")
+        void quitaOcupados() {
+            assertThat(ReglasCita.horariosDisponibles(DANIELA, LUNES, citas, 30, null))
+                    .isEqualTo(horas("08:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30"));
+        }
+
+        @Test
+        @DisplayName("para un servicio de 50 min solo ofrece horas con dos bloques seguidos libres")
+        void dosBloques() {
+            assertThat(ReglasCita.horariosDisponibles(DANIELA, LUNES, citas, 50, null))
+                    .isEqualTo(horas("09:30", "10:00", "10:30", "11:00", "11:30", "12:00"));
+        }
+
+        @Test
+        @DisplayName("si la fecha es hoy no ofrece horas que ya pasaron")
+        void sinHorasPasadas() {
+            LocalDateTime ahora = LocalDateTime.of(2026, 10, 12, 10, 15);
+            assertThat(ReglasCita.horariosDisponibles(DANIELA, LUNES, citas, 30, ahora))
+                    .isEqualTo(horas("10:30", "11:00", "11:30", "12:00", "12:30"));
+        }
+
+        @Test
+        @DisplayName("una hora que empieza justo ahora ya no se ofrece; un día futuro no se recorta")
+        void bordeDeAhora() {
+            assertThat(ReglasCita.horariosDisponibles(DANIELA, LUNES, List.of(), 30, LocalDateTime.of(2026, 10, 12, 12, 0)))
+                    .isEqualTo(horas("12:30"));
+            assertThat(ReglasCita.horariosDisponibles(DANIELA, LUNES, List.of(), 30, LocalDateTime.of(2026, 10, 11, 23, 0)))
+                    .hasSize(10);
+        }
+
+        @Test
+        @DisplayName("un servicio de 90 min no se ofrece si termina después de la jornada (Daniela cierra a las 13:00)")
+        void noSePasaDeLaJornada() {
+            assertThat(ReglasCita.horariosDisponibles(DANIELA, LUNES, List.of(), 90, null)).last().isEqualTo(t("11:30"));
+        }
+
+        @Test
+        @DisplayName("un día en que no atiende no tiene horas")
+        void diaSinAtencion() {
+            assertThat(ReglasCita.horariosDisponibles(RODRIGO, LUNES, List.of(), 30, null)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("chocaConOtraCita (RN-10)")
+    class ChocaConOtraCita {
+        final Cita ocupada = cita("C1", "NUT003", LUNES, "08:30", 50, PENDIENTE);
+
+        @Test
+        @DisplayName("detecta el choque con una cita que ocupa ese bloque")
+        void detecta() {
+            assertThat(ReglasCita.chocaConOtraCita(List.of(ocupada), "NUT003", LUNES, t("09:00"), 30, null)).isTrue();
+        }
+
+        @Test
+        @DisplayName("no hay choque con otro nutricionista, con una cita cancelada ni con la misma cita")
+        void sinChoque() {
+            Cita otroNutricionista = cita("C1", "NUT001", LUNES, "08:30", 50, PENDIENTE);
+            Cita cancelada = cita("C1", "NUT003", LUNES, "08:30", 50, CANCELADA);
+
+            assertThat(ReglasCita.chocaConOtraCita(List.of(otroNutricionista), "NUT003", LUNES, t("08:30"), 30, null)).isFalse();
+            assertThat(ReglasCita.chocaConOtraCita(List.of(cancelada), "NUT003", LUNES, t("08:30"), 30, null)).isFalse();
+            assertThat(ReglasCita.chocaConOtraCita(List.of(ocupada), "NUT003", LUNES, t("08:30"), 30, "C1")).isFalse();
+        }
+
+        @Test
+        @DisplayName("no hay choque en otro día ni en una hora libre del mismo día, aunque sea la contigua")
+        void otroDiaUHoraLibre() {
+            LocalDate martes = LUNES.plusDays(1);
+            assertThat(ReglasCita.chocaConOtraCita(List.of(ocupada), "NUT003", martes, t("08:30"), 30, null)).isFalse();
+            // ocupada usa 08:30 y 09:00: 09:30 queda libre, y 08:00 por 30 min termina justo a las 08:30.
+            assertThat(ReglasCita.chocaConOtraCita(List.of(ocupada), "NUT003", LUNES, t("09:30"), 30, null)).isFalse();
+            assertThat(ReglasCita.chocaConOtraCita(List.of(ocupada), "NUT003", LUNES, t("08:00"), 30, null)).isFalse();
+        }
+
+        @Test
+        @DisplayName("choca si la cita pedida se extiende sobre la ocupada (08:00 por 50 min pisa las 08:30)")
+        void choqueQueSeExtiende() {
+            assertThat(ReglasCita.chocaConOtraCita(List.of(ocupada), "NUT003", LUNES, t("08:00"), 50, null)).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("puedeCancelar (RN-06)")
+    class PuedeCancelar {
+        final Cita confirmada = cita("C1", "NUT001", LocalDate.of(2026, 10, 16), "10:00", 30, CONFIRMADA);
+
+        @Test
+        @DisplayName("permite cancelar con más de 24 h de anticipación")
+        void masDe24() {
+            assertThat(ReglasCita.puedeCancelar(confirmada, LocalDateTime.of(2026, 10, 14, 10, 0))).isTrue();
+        }
+
+        @Test
+        @DisplayName("no permite cancelar con 24 h o menos")
+        void hasta24() {
+            assertThat(ReglasCita.puedeCancelar(confirmada, LocalDateTime.of(2026, 10, 15, 10, 0))).isFalse();
+            assertThat(ReglasCita.puedeCancelar(confirmada, LocalDateTime.of(2026, 10, 15, 12, 0))).isFalse();
+        }
+
+        @Test
+        @DisplayName("no permite cancelar una cita que ya terminó")
+        void terminada() {
+            Cita atendida = cita("C1", "NUT001", LocalDate.of(2026, 10, 16), "10:00", 30, ATENDIDA);
+            assertThat(ReglasCita.puedeCancelar(atendida, LocalDateTime.of(2026, 10, 1, 0, 0))).isFalse();
+        }
+
+        @Test
+        @DisplayName("cuenta horas reales: el 6 de septiembre de 2026 Chile adelanta el reloj y el día dura 23 h")
+        void cambioDeHorarioDeSeptiembre() {
+            // En el reloj faltan 24 h 30 min, pero en la realidad solo 23 h 30 min: no se puede.
+            Cita domingo = cita("C1", "NUT001", LocalDate.of(2026, 9, 6), "10:00", 30, CONFIRMADA);
+            assertThat(ReglasCita.puedeCancelar(domingo, LocalDateTime.of(2026, 9, 5, 9, 30))).isFalse();
+            assertThat(ReglasCita.puedeCancelar(domingo, LocalDateTime.of(2026, 9, 5, 8, 30))).isTrue();
+        }
+
+        @Test
+        @DisplayName("y al revés en abril: el 4/4/2027 Chile atrasa el reloj, el día dura 25 h y sí se puede")
+        void cambioDeHorarioDeAbril() {
+            // En el reloj faltan 23 h 30 min, pero en la realidad 24 h 30 min.
+            Cita domingo = cita("C1", "NUT001", LocalDate.of(2027, 4, 4), "10:00", 30, CONFIRMADA);
+            assertThat(ReglasCita.puedeCancelar(domingo, LocalDateTime.of(2027, 4, 3, 10, 30))).isTrue();
+        }
+
+        @Test
+        @DisplayName("el borde exacto: 24 h y 1 min sí; 24 h justas no; también desde PENDIENTE")
+        void bordeExacto() {
+            assertThat(ReglasCita.puedeCancelar(confirmada, LocalDateTime.of(2026, 10, 15, 9, 59))).isTrue();
+            assertThat(ReglasCita.puedeCancelar(confirmada, LocalDateTime.of(2026, 10, 15, 10, 0))).isFalse();
+            Cita pendiente = cita("C1", "NUT001", LocalDate.of(2026, 10, 16), "10:00", 30, PENDIENTE);
+            assertThat(ReglasCita.puedeCancelar(pendiente, LocalDateTime.of(2026, 10, 14, 10, 0))).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("necesitaRecordatorio (RN-07)")
+    class NecesitaRecordatorio {
+        final Cita confirmada = cita("C1", "NUT001", LocalDate.of(2026, 10, 16), "10:00", 30, CONFIRMADA);
+
+        @Test
+        @DisplayName("avisa a una cita confirmada cuando faltan 24 h o menos")
+        void avisa() {
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 15, 12, 0))).isTrue();
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 15, 10, 0))).isTrue();
+        }
+
+        @Test
+        @DisplayName("no avisa con más de 24 h, a una cita pasada ni a una cita que no está confirmada")
+        void noAvisa() {
+            Cita pendiente = cita("C1", "NUT001", LocalDate.of(2026, 10, 16), "10:00", 30, PENDIENTE);
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 14, 10, 0))).isFalse();
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 16, 11, 0))).isFalse();
+            assertThat(ReglasCita.necesitaRecordatorio(pendiente, LocalDateTime.of(2026, 10, 15, 12, 0))).isFalse();
+        }
+
+        @Test
+        @DisplayName("los bordes: 24 h y 1 min no; 1 min antes sí; a la hora exacta de la cita ya no")
+        void bordes() {
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 15, 9, 59))).isFalse();
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 16, 9, 59))).isTrue();
+            assertThat(ReglasCita.necesitaRecordatorio(confirmada, LocalDateTime.of(2026, 10, 16, 10, 0))).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("puedeAgendarTeleconsulta (RN-16)")
+    class Teleconsulta {
+        final Set<String> online = Set.of("CN004");
+
+        @Test
+        @DisplayName("la permite si el paciente tiene una consulta presencial atendida")
+        void permite() {
+            assertThat(ReglasCita.puedeAgendarTeleconsulta(List.of(conServicio(ATENDIDA, "CN002")), online)).isTrue();
+        }
+
+        @Test
+        @DisplayName("no la permite a un paciente nuevo, con solo inasistencias o con solo teleconsultas")
+        void noPermite() {
+            assertThat(ReglasCita.puedeAgendarTeleconsulta(List.of(), online)).isFalse();
+            assertThat(ReglasCita.puedeAgendarTeleconsulta(List.of(conServicio(INASISTENCIA, "CN001")), online)).isFalse();
+            assertThat(ReglasCita.puedeAgendarTeleconsulta(List.of(conServicio(ATENDIDA, "CN004")), online)).isFalse();
+        }
+
+        @Test
+        @DisplayName("acepta otra lista de servicios no presenciales")
+        void otraLista() {
+            assertThat(ReglasCita.puedeAgendarTeleconsulta(List.of(conServicio(ATENDIDA, "CN002")), Set.of("CN002", "CN004")))
+                    .isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("validarMotivo (RN-14)")
+    class ValidarMotivo {
+        @Test
+        @DisplayName("exige entre 10 y 300 caracteres sin contar los espacios de los extremos")
+        void largo() {
+            assertThat(ReglasCita.validarMotivo("a".repeat(9))).hasValueSatisfying(m -> assertThat(m).contains("al menos 10"));
+            assertThat(ReglasCita.validarMotivo("    corto     ")).hasValueSatisfying(m -> assertThat(m).contains("al menos 10"));
+            assertThat(ReglasCita.validarMotivo(null)).hasValueSatisfying(m -> assertThat(m).contains("al menos 10"));
+            assertThat(ReglasCita.validarMotivo("a".repeat(10))).isEmpty();
+            assertThat(ReglasCita.validarMotivo("a".repeat(300))).isEmpty();
+            assertThat(ReglasCita.validarMotivo("a".repeat(301))).hasValueSatisfying(m -> assertThat(m).contains("como máximo 300"));
+        }
+    }
+
+    @Nested
+    @DisplayName("validarFechaCita (RN-13)")
+    class ValidarFechaCita {
+        final LocalDate hoy = LocalDate.of(2026, 10, 16);   // viernes 16 de octubre de 2026
+
+        @Test
+        @DisplayName("acepta desde hoy hasta 60 días adelante, extremos incluidos")
+        void extremos() {
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2026, 10, 16), hoy)).isEmpty();
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2026, 12, 15), hoy)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("cruza el año: desde el 20/12/2026 se puede hasta el 18/2/2027")
+        void cruzaElAnio() {
+            LocalDate diciembre = LocalDate.of(2026, 12, 20);
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2027, 2, 18), diciembre)).isEmpty();
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2027, 2, 19), diciembre))
+                    .hasValue("Solo se puede agendar hasta 60 días adelante (hasta el 18 de febrero de 2027).");
+        }
+
+        @Test
+        @DisplayName("rechaza una fecha pasada o a más de 60 días, con la fecha límite en palabras")
+        void fueraDeRango() {
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2026, 10, 15), hoy)).hasValue("Esa fecha ya pasó. Elige una desde hoy.");
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2026, 12, 16), hoy))
+                    .hasValue("Solo se puede agendar hasta 60 días adelante (hasta el 15 de diciembre de 2026).");
+        }
+
+        @Test
+        @DisplayName("no se corre con el cambio de horario de abril")
+        void cambioDeHorario() {
+            assertThat(ReglasCita.validarFechaCita(LocalDate.of(2027, 5, 19), LocalDate.of(2027, 3, 20))).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("estadísticas (RN-27)")
+    class Estadisticas_ {
+        @Test
+        @DisplayName("lunesDeLaSemana: el domingo pertenece a la semana del lunes anterior y cruza meses")
+        void lunes() {
+            assertThat(ReglasCita.lunesDeLaSemana(LocalDate.of(2026, 10, 16))).isEqualTo(LocalDate.of(2026, 10, 12));
+            assertThat(ReglasCita.lunesDeLaSemana(LocalDate.of(2026, 10, 12))).isEqualTo(LocalDate.of(2026, 10, 12));
+            assertThat(ReglasCita.lunesDeLaSemana(LocalDate.of(2026, 10, 18))).isEqualTo(LocalDate.of(2026, 10, 12));
+            assertThat(ReglasCita.lunesDeLaSemana(LocalDate.of(2026, 10, 1))).isEqualTo(LocalDate.of(2026, 9, 28));
+        }
+
+        final List<Cita> citas = List.of(
+                cita("1", "NUT001", "2026-10-05", ATENDIDA),
+                cita("2", "NUT001", "2026-10-06", ATENDIDA),
+                cita("3", "NUT003", "2026-10-07", ATENDIDA),
+                cita("4", "NUT002", "2026-10-08", INASISTENCIA),
+                cita("5", "NUT003", "2026-10-14", PENDIENTE),
+                cita("6", "NUT003", "2026-10-14", CANCELADA),   // no cuenta
+                cita("7", "NUT002", "2026-10-25", ATENDIDA),    // después del rango
+                cita("8", "NUT001", "2026-09-30", INASISTENCIA)); // antes del rango (misma semana que el 1/10)
+        final Estadisticas resultado = ReglasCita.calcularEstadisticas(
+                citas, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 20), IDS);
+
+        @Test
+        @DisplayName("cuenta las citas del período sin las canceladas ni las de fuera del rango")
+        void totales() {
+            assertThat(resultado.total()).isEqualTo(5);
+            assertThat(resultado.atendidas()).isEqualTo(3);
+            assertThat(resultado.inasistencias()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("la tasa de inasistencia es una proporción sobre las citas ya ocurridas")
+        void tasa() {
+            assertThat(resultado.tasaInasistencia()).isEqualTo(0.25);
+        }
+
+        @Test
+        @DisplayName("cada agrupación suma lo mismo que el total e incluye las filas en 0")
+        void agrupaciones() {
+            assertThat(resultado.porNutricionista()).containsExactly(
+                    new Estadisticas.PorNutricionista("NUT001", 2),
+                    new Estadisticas.PorNutricionista("NUT002", 1),
+                    new Estadisticas.PorNutricionista("NUT003", 2),
+                    new Estadisticas.PorNutricionista("NUT004", 0));
+            assertThat(resultado.porSemana()).extracting(Estadisticas.PorSemana::semana).containsExactly(
+                    LocalDate.of(2026, 9, 28), LocalDate.of(2026, 10, 5),
+                    LocalDate.of(2026, 10, 12), LocalDate.of(2026, 10, 19));
+            assertThat(resultado.porSemana().stream().mapToInt(Estadisticas.PorSemana::total).sum()).isEqualTo(5);
+            assertThat(resultado.porSemana()).extracting(Estadisticas.PorSemana::total).containsExactly(0, 4, 1, 0);
+        }
+
+        @Test
+        @DisplayName("los extremos del período cuentan: una cita el mismo día de desde y otra el de hasta")
+        void extremosIncluidos() {
+            Estadisticas e = ReglasCita.calcularEstadisticas(
+                    List.of(cita("1", "NUT001", "2026-10-01", ATENDIDA), cita("2", "NUT001", "2026-10-20", INASISTENCIA)),
+                    LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 20), IDS);
+            assertThat(e.total()).isEqualTo(2);
+            assertThat(e.tasaInasistencia()).isEqualTo(0.5);
+        }
+
+        @Test
+        @DisplayName("solo inasistencias: la tasa es 1 (100 %); una cita de un nutricionista fuera de la lista suma al total")
+        void tasaCompletaYNutricionistaAjeno() {
+            Estadisticas e = ReglasCita.calcularEstadisticas(
+                    List.of(cita("1", "NUT001", "2026-10-14", INASISTENCIA), cita("2", "NUT099", "2026-10-14", INASISTENCIA)),
+                    LocalDate.of(2026, 10, 12), LocalDate.of(2026, 10, 18), List.of("NUT001"));
+            assertThat(e.tasaInasistencia()).isEqualTo(1.0);
+            assertThat(e.total()).isEqualTo(2);
+            assertThat(e.porNutricionista()).containsExactly(new Estadisticas.PorNutricionista("NUT001", 1));
+        }
+
+        @Test
+        @DisplayName("con desde después de hasta no hay semanas ni citas")
+        void periodoInvertido() {
+            Estadisticas e = ReglasCita.calcularEstadisticas(citas, LocalDate.of(2026, 10, 20), LocalDate.of(2026, 10, 1), IDS);
+            assertThat(e.total()).isZero();
+            assertThat(e.porSemana()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("sin citas devuelve todo en 0; con solo pendientes la tasa es 0 y no se divide por cero")
+        void sinDivisionPorCero() {
+            Estadisticas vacio = ReglasCita.calcularEstadisticas(List.of(), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 20), IDS);
+            assertThat(vacio.total()).isZero();
+            assertThat(vacio.tasaInasistencia()).isZero();
+            assertThat(vacio.porNutricionista()).hasSize(4);
+            assertThat(vacio.porSemana()).hasSize(4);
+
+            Estadisticas pendientes = ReglasCita.calcularEstadisticas(List.of(cita("1", "NUT001", "2026-10-14", PENDIENTE)),
+                    LocalDate.of(2026, 10, 12), LocalDate.of(2026, 10, 18), IDS);
+            assertThat(pendientes.tasaInasistencia()).isZero();
+            assertThat(pendientes.porSemana()).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("rolPuedeCambiarA (RN-24 a RN-26)")
+    class Roles {
+        @Test
+        @DisplayName("el paciente solo cancela; el nutricionista solo marca atendida o inasistencia")
+        void pacienteYNutricionista() {
+            assertThat(ReglasCita.rolPuedeCambiarA("PACIENTE", CANCELADA)).isTrue();
+            assertThat(ReglasCita.rolPuedeCambiarA("PACIENTE", CONFIRMADA)).isFalse();
+            assertThat(ReglasCita.rolPuedeCambiarA("NUTRICIONISTA", ATENDIDA)).isTrue();
+            assertThat(ReglasCita.rolPuedeCambiarA("NUTRICIONISTA", CANCELADA)).isFalse();
+        }
+
+        @Test
+        @DisplayName("la secretaria no marca atendida; el admin puede todo; un rol desconocido, nada")
+        void secretariaYAdmin() {
+            assertThat(ReglasCita.rolPuedeCambiarA("SECRETARIA", ATENDIDA)).isFalse();
+            assertThat(ReglasCita.rolPuedeCambiarA("SECRETARIA", CONFIRMADA)).isTrue();
+            assertThat(ReglasCita.rolPuedeCambiarA("ADMIN", ATENDIDA)).isTrue();
+            assertThat(ReglasCita.rolPuedeCambiarA("INVITADO", CANCELADA)).isFalse();
+            assertThat(ReglasCita.rolPuedeCambiarA(null, CANCELADA)).isFalse();
+        }
+    }
+
+    // Espejo de describe("buscarProximasHorasLibres") de utils/citas.test.js (decisión 3).
+    @Nested
+    @DisplayName("buscarProximasHorasLibres (agenda rápida del Inicio)")
+    class BuscarProximasHorasLibres {
+        final HorarioNutricionista felipe = new HorarioNutricionista("NUT004", List.of(2, 3, 4, 5), t("14:00"), t("19:00"));
+        final List<HorarioNutricionista> todos = List.of(CAROLINA, RODRIGO, DANIELA, felipe);
+        final LocalDateTime lunes7am = LocalDateTime.of(2026, 10, 12, 7, 0);
+        final LocalDate martes = LUNES.plusDays(1);
+
+        List<HoraLibre> buscar(List<Cita> citas, LocalDateTime ahora, int cantidad) {
+            return ReglasCita.buscarProximasHorasLibres(todos, citas, ahora, cantidad, 14);
+        }
+
+        @Test
+        @DisplayName("un lunes a las 7:00 empieza Daniela a las 08:00, en orden de hora")
+        void primerasHorasEnOrden() {
+            assertThat(buscar(List.of(), lunes7am, 3)).containsExactly(
+                    new HoraLibre("NUT003", LUNES, t("08:00")),
+                    new HoraLibre("NUT003", LUNES, t("08:30")),
+                    new HoraLibre("NUT001", LUNES, t("09:00")));
+        }
+
+        @Test
+        @DisplayName("no ofrece horas ocupadas ni pasadas; a la misma hora ordena por nutricionista")
+        void sinOcupadasNiPasadas() {
+            List<Cita> citas = List.of(cita("C1", "NUT003", LUNES, "09:00", 30, CONFIRMADA));
+
+            assertThat(buscar(citas, LocalDateTime.of(2026, 10, 12, 8, 40), 3)).containsExactly(
+                    new HoraLibre("NUT001", LUNES, t("09:00")),
+                    new HoraLibre("NUT001", LUNES, t("09:30")),
+                    new HoraLibre("NUT003", LUNES, t("09:30")));
+        }
+
+        @Test
+        @DisplayName("si hoy ya no quedan horas, sigue con el día siguiente")
+        void sigueAlDiaSiguiente() {
+            assertThat(buscar(List.of(), LocalDateTime.of(2026, 10, 12, 18, 0), 1))
+                    .containsExactly(new HoraLibre("NUT003", martes, t("08:00")));
+        }
+
+        @Test
+        @DisplayName("junta horas de varios días cuando un día no alcanza")
+        void juntaVariosDias() {
+            // A las 16:10 a Carolina le queda solo 16:30.
+            assertThat(buscar(List.of(), LocalDateTime.of(2026, 10, 12, 16, 10), 2)).containsExactly(
+                    new HoraLibre("NUT001", LUNES, t("16:30")),
+                    new HoraLibre("NUT003", martes, t("08:00")));
+        }
+
+        @Test
+        @DisplayName("lista vacía con cantidad 0 o negativa, o sin nutricionistas")
+        void vacia() {
+            assertThat(buscar(List.of(), lunes7am, 0)).isEmpty();
+            assertThat(buscar(List.of(), lunes7am, -1)).isEmpty();
+            assertThat(ReglasCita.buscarProximasHorasLibres(List.of(), List.of(), lunes7am, 4, 14)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("no revisa más días que diasMaximos")
+        void topeDeDias() {
+            LocalDateTime lunesNoche = LocalDateTime.of(2026, 10, 12, 18, 0);
+
+            assertThat(ReglasCita.buscarProximasHorasLibres(todos, List.of(), lunesNoche, 1, 1)).isEmpty();
+            assertThat(ReglasCita.buscarProximasHorasLibres(todos, List.of(), lunesNoche, 1, 2))
+                    .containsExactly(new HoraLibre("NUT003", martes, t("08:00")));
+            assertThat(ReglasCita.buscarProximasHorasLibres(todos, List.of(), lunesNoche, 1, -1)).isEmpty();
+        }
+    }
+}

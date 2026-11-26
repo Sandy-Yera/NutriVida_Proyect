@@ -2,25 +2,36 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FormCambioClave from "../../components/acceso/FormCambioClave.jsx";
 import FormDatosPerfil from "../../components/acceso/FormDatosPerfil.jsx";
+import EditorFotoNutricionista from "../../components/clinica/EditorFotoNutricionista.jsx";
 import { obtenerSesion } from "../../auth/auth.js";
 import { NOMBRE_ROL } from "../../config/roles.js";
+import { obtenerNutricionista } from "../../services/serviciosService.js";
 import { actualizarUsuario, cambiarClave, obtenerUsuario } from "../../services/usuariosService.js";
 import { formatearFechaLarga } from "../../utils/formato.js";
 
 export default function Perfil() {
   const navigate = useNavigate();
-  const idSesion = obtenerSesion()?.id;
+  const sesion = obtenerSesion();
+  const idSesion = sesion?.id;
+  // Solo los nutricionistas tienen foto pública (la ven los pacientes en Nosotros y al agendar).
+  const nutricionistaId = sesion?.rol === "NUTRICIONISTA" ? sesion.nutricionistaId : null;
   const [usuario, setUsuario] = useState(null);
+  const [nutricionista, setNutricionista] = useState(null);
 
   useEffect(() => {
     let vigente = true;
-    obtenerUsuario(idSesion).then((encontrado) => {
-      if (vigente) setUsuario(encontrado);
+    Promise.all([
+      obtenerUsuario(idSesion),
+      nutricionistaId ? obtenerNutricionista(nutricionistaId) : null,
+    ]).then(([encontrado, ficha]) => {
+      if (!vigente) return;
+      setUsuario(encontrado);
+      setNutricionista(ficha);
     });
     return () => {
       vigente = false;
     };
-  }, [idSesion]);
+  }, [idSesion, nutricionistaId]);
 
   function avisar(mensaje) {
     navigate("/perfil", { replace: true, state: { mensaje, tipo: "exito" } });
@@ -70,8 +81,14 @@ export default function Perfil() {
             <FormDatosPerfil usuario={usuario} onGuardar={guardarDatos} />
           </div>
         </div>
-        <div className="col-12 col-lg-5">
-          <div className="bg-white border rounded-3 p-3 p-md-4 h-100">
+        <div className="col-12 col-lg-5 d-flex flex-column gap-4">
+          {nutricionista && (
+            <div className="bg-white border rounded-3 p-3 p-md-4">
+              <h2 className="h4 mb-3">Foto de perfil</h2>
+              <EditorFotoNutricionista nutricionista={nutricionista} onCambio={setNutricionista} />
+            </div>
+          )}
+          <div className="bg-white border rounded-3 p-3 p-md-4 flex-grow-1">
             <h2 className="h4 mb-3">Cambiar contraseña</h2>
             <FormCambioClave onGuardar={guardarClave} />
           </div>

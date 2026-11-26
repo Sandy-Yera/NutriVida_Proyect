@@ -1,6 +1,6 @@
 # 4. Módulo de citas: solicitud, pago simulado y agendas
 
-Responsable: Simon. Tareas S-01 a S-10 del plan del proyecto. ERS V2 (EP2, frontend React con datos simulados).
+Responsable: Simon. Tareas S-01 a S-10 (EP2) y S-30 a S-37 (EP3) del plan del proyecto. **ERS V3** (EP3: el frontend de EP2 más el microservicio ms-citas con Spring Boot y MySQL). Las secciones 4.1 a 4.11 son las de la V2 y siguen vigentes. Lo que agrega la V3 está en las secciones 4.12 a 4.17.
 
 ## 4.1 Alcance
 
@@ -8,7 +8,7 @@ El módulo es el "pedido" del caso: el flujo completo de una cita, desde que el 
 
 El módulo no administra servicios ni nutricionistas: los lee del módulo clínico (`serviciosService`). Tampoco maneja la sesión: la lee del módulo de acceso (`auth.js`).
 
-**Estado en esta versión:** los 9 requisitos (RF-CIT-01 a RF-CIT-09) están construidos y probados.
+**Estado en esta versión:** los 9 requisitos de pantalla (RF-CIT-01 a RF-CIT-09) y los 6 del backend (RF-CIT-10 a RF-CIT-15) están construidos y probados. Con `VITE_API_MODE=api` las mismas pantallas trabajan contra ms-citas (sección 4.12).
 
 ## 4.2 Actores
 
@@ -212,7 +212,7 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 
 ## 4.8 Requisitos no funcionales del módulo
 
-- **Seguridad simulada en EP2:** el pago es simulado y no se envía a ningún banco; solo se guardan los 4 últimos dígitos de la tarjeta. Las reglas por rol (por ejemplo, que el paciente vea solo sus citas) se cumplen en el frontend, que se puede saltar editando el almacenamiento del navegador.
+- **Seguridad simulada en EP2:** el pago es simulado y no se envía a ningún banco; solo se guardan los 4 últimos dígitos de la tarjeta. Las reglas por rol (por ejemplo, que el paciente vea solo sus citas) se cumplen en el frontend, que se puede saltar editando el almacenamiento del navegador. **En EP3 ms-citas las repite en el servidor** (sección 4.15): ya no se pueden saltar desde el navegador.
 - **Responsive:** las vistas se revisan en 360, 768 y 1280 px. Las opciones del asistente pasan de una a dos columnas, y el pago muestra el resumen y la tarjeta lado a lado en escritorio.
 - **Accesibilidad:**
   - Todos los campos tienen `<label>`; los errores usan role="alert" y las confirmaciones y avisos role="status".
@@ -277,3 +277,105 @@ Las fechas se guardan como texto `AAAA-MM-DD` y se comparan como texto: así no 
 | Pagos semilla | P0001 a P0005, aprobados, terminados en 4242 | Cada cita semilla tiene su pago. |
 | Anticipación máxima | 60 días | Indicada en el plan del proyecto. |
 | Restablecer los datos | `restablecerDatosDemo()` de `almacen.js` | Vuelve las citas y los pagos a la semilla antes de grabar el video. |
+| Restablecer los datos (EP3) | `.\scripts\verificar.ps1 -Solo docker` recarga `database/02_citas.sql` | Vuelve las citas y los pagos de MySQL a la semilla antes de grabar el video. |
+
+## 4.12 Versión 3 (EP3): ms-citas
+
+En EP3 las citas y los pagos pasan del navegador a **ms-citas**, un microservicio Spring Boot en el puerto 8082 con su propio esquema MySQL, `nutrivida_citas`. Las pantallas de 4.4 no cambian: con `VITE_API_MODE=api`, `citasService` y `pagosService` llaman a la API en vez de a `data/` (modo dual). El contrato está en `documentacion/ep3/contrato-backend.md` §6, y el manual con capturas en `documentacion/capturas/manual-citas.md`.
+
+```text
+React (:8080) → Nginx → ms-citas (:8082) → MySQL nutrivida_citas
+                            ├→ ms-clinica (:8083): servicios y horarios
+                            └→ ms-usuarios (:8081): ¿la cuenta sigue activa?
+```
+
+## 4.13 Requisitos funcionales del backend
+
+### RF-CIT-10 Agendar y pagar en una sola transacción
+
+- **Endpoint:** `POST /api/citas` (PACIENTE), con los datos de la cita más `tarjeta`.
+- **Reglas:** el paciente sale del token, no del cuerpo. En orden: servicio activo y agendable, nutricionista existente, motivo y fecha (RN-13, RN-14), tarjeta (RN-18), teleconsulta (RN-16), candado de la agenda del día, hora libre (RN-09 a RN-12) y recién entonces el cobro (RN-19). Una hora tomada no cobra nada.
+- **Respuestas:** 201 con la cita PENDIENTE y su `pagoId` · 400 con `errores` por campo · 402 si el banco rechaza (el pago RECHAZADO se guarda) · 409 si la hora está tomada o la teleconsulta no está habilitada.
+- **Criterio de aceptación:** con 4242… se crea la cita; repetir la misma hora da 409; con 4000…0002 da 402 y no se crea cita.
+- **Pruebas:** `ApiCitasTest`, `CitaServiceTest` y las peticiones de humo de `verificar.ps1`.
+
+### RF-CIT-11 Consultar citas según el rol
+
+- **Endpoints:** `GET /api/citas/mias` (PACIENTE), `GET /api/citas/agenda?desde&hasta` (NUTRICIONISTA, solo su `nutricionistaId`), `GET /api/citas?pacienteId&nutricionistaId&estado&desde&hasta` (SECRETARIA y ADMIN) y `GET /api/citas/{id}` (dueño, SECRETARIA o ADMIN).
+- **Reglas:** RN-24 a RN-26. Una cita ajena responde 403 ("Esa cita no es tuya." / "Esa cita no está en tu agenda.").
+- **Pruebas:** `ApiCitasTest` (cada rol con lo suyo, dueño).
+
+### RF-CIT-12 Cambiar el estado y reprogramar
+
+- **Endpoints:** `PATCH /api/citas/{id}/estado` con `{ estado }` y `PATCH /api/citas/{id}/reprogramar` con `{ fecha, hora }`.
+- **Reglas:** las transiciones de 4.3 (RN-02), lo que permite cada rol (RN-24 a RN-26), 24 h para el paciente (RN-06), el historial con el `sub` del token (RN-04) y el reembolso al cancelar en la misma transacción (RN-08). La cita se bloquea (`SELECT … FOR UPDATE`) mientras cambia.
+- **Respuestas:** 200 · 403 si el rol no puede · 409 si la transición no existe o faltan menos de 24 h.
+- **Pruebas:** `ApiCitasTest` (ciclo de vida, 24 h justas, reprogramar) y `CitaServiceTest`.
+
+### RF-CIT-13 Disponibilidad pública
+
+- **Endpoints:** `GET /api/disponibilidad?nutricionistaId&fecha&duracion&excluir` y `GET /api/disponibilidad/proximas?cantidad` (1 a 20, hasta 14 días). Sin token.
+- **Reglas:** la misma función (`ReglasCita.horariosDisponibles`) decide lo que se ofrece y lo que se acepta al crear. El horario sale de ms-clinica.
+- **Pruebas:** `ReglasCitaTest` (con pruebas mutantes) y `ApiCitasTest`.
+
+### RF-CIT-14 Comprobantes y estadísticas
+
+- **Endpoints:** `GET /api/pagos/{id}` (quien pagó o ADMIN), `GET /api/pagos?citaIds` (ADMIN) y `GET /api/citas/estadisticas?desde&hasta` (ADMIN, RN-27 y RN-34, misma forma que en EP2).
+- **Reglas:** de la tarjeta solo se devuelven los 4 últimos dígitos (RN-20). `desde` posterior a `hasta` da 400.
+- **Pruebas:** `ApiCitasTest` y `ReglasCitaTest`.
+
+### RF-CIT-15 Eliminar una cita cancelada
+
+- **Endpoint:** `DELETE /api/citas/{id}` (ADMIN).
+- **Reglas:** solo citas CANCELADAS; cualquier otra da 409. Las razones están en el contrato §6.1.
+- **Respuestas:** 204 · 409 · 404.
+- **Pruebas:** `ApiCitasTest` (cancelar → reembolso → eliminar) y la petición de humo de `verificar.ps1`.
+
+## 4.14 Datos en MySQL (`database/02_citas.sql`)
+
+| Tabla | Campos principales | Restricciones |
+| --- | --- | --- |
+| `pago` | id, paciente_id, monto, ultimos4, estado, motivo, fecha | `CHECK` de estado, monto > 0 y 4 dígitos |
+| `cita` | id, paciente_id, nutricionista_id, servicio_codigo, fecha, hora, duracion_min, motivo, estado, pago_id, creada_en | `pago_id NOT NULL UNIQUE` (RN-35, sin pago doble), `CHECK` de estado y motivo de 10 a 300 |
+| `historial_cita` | cita_id, fecha (UTC), estado_anterior, estado_nuevo, usuario_id | FK a `cita` con borrado en cascada |
+| `recordatorio` | cita_id, enviado_en | Uno por cita (S-34, si sobra tiempo) |
+| `agenda_dia` | nutricionista_id, fecha | Candado: dos reservas del mismo nutricionista y día se atienden de a una |
+| `contador` | nombre, ultimo | IDs con el formato de EP2 (`C0006`, `P0006`) sin repetir |
+
+- Los IDs de pacientes, nutricionistas y servicios se guardan por valor, **sin claves foráneas a otros esquemas**: cada microservicio es dueño de sus datos.
+- El JSON de la API mantiene los nombres de campo de 4.6, así las pantallas no cambian.
+- Hibernate arranca con `ddl-auto=validate`: si una entidad y una tabla no calzan, ms-citas no arranca.
+
+## 4.15 Requisitos no funcionales del backend
+
+- **Seguridad:** JWT (8 h) validado en ms-citas con el mismo `JWT_SECRET` de los 3 microservicios. Rol con `@PreAuthorize` en cada endpoint. Dueño, 24 h y transiciones en el service. Un usuario desactivado pierde el acceso aunque su token siga vigente: ms-citas pregunta a ms-usuarios, con 30 s de memoria, y responde 401 "Tu cuenta está desactivada. Contacta a la clínica." (decisión 2 del equipo).
+- **Integridad:** cada operación que revisa una regla y escribe es un `@Transactional`. La base es la última barrera (`UNIQUE`, `CHECK`, candado de agenda).
+- **Errores:** todo error responde con el JSON común `timestamp, status, error, mensaje, ruta, errores`, también los 401 y 403 de Spring Security. Si ms-clinica o ms-usuarios no responden: 503.
+- **Disponibilidad:** mientras los endpoints de ms-clinica (C-31) y ms-usuarios (G-32) no existan, ms-citas usa las semillas de EP2 (modo `auto`). Con `http`, para el video, usa solo los datos reales.
+- **Documentación:** Swagger en `http://localhost:8082/swagger-ui.html`, con ejemplos y códigos de respuesta en cada endpoint.
+- **Portabilidad:** todo se levanta con `docker compose up -d --build`, en Windows o Linux, sin instalar Java, Maven ni Node.
+
+## 4.16 Registro de pruebas del backend
+
+156 pruebas JUnit en `backend/ms-citas/src/test/java`, más pruebas mutantes y 20 pruebas nuevas de Vitest para el modo API. `.\scripts\verificar.ps1` las corre todas.
+
+| Nivel | Clases | Qué verifican | Mock o spy |
+| --- | --- | --- | --- |
+| Reglas puras | `ReglasCitaTest` (57), `ReglasPagoTest` (18) | Espejo de `citas.test.js` y `pagos.test.js`: bloques, choques, 24 h (con cambio de horario), 60 días, teleconsulta, estadísticas, próximas horas, Luhn | No. Con **PIT**: 252 mutantes, 250 muertos y 2 equivalentes documentados |
+| Modelo y repositorio | `CitaTest`, `ContadorTest`, `ServicioClinicaTest`, `CitaRepositoryTest` | Historial, correlativos, modalidad, consultas y `UNIQUE (pago_id)` sobre H2 | No |
+| Clientes | `ClinicaHttpTest`, `ClinicaConRespaldoTest`, `ClinicaSimuladaTest`, `UsuariosClientesTest`, `VerificadorCuentaTest`, `ClinicaConfigTest`, `UsuariosConfigTest`, `ClinicaEnLaAppTest` | Servidor HTTP falso del JDK: 404, 500, tiempo agotado, JSON que no calza, respaldo con semillas, memoria de 30 s | Servidor HTTP real del JDK |
+| Service | `CitaServiceTest` (4) | Transición no permitida, 24 h, pago rechazado sin cita, hora tomada sin cobro, 403 de dueño | **Mockito** (repositorios y usuario del token) |
+| API | `ApiCitasTest` (16), `FormatoErrorTest` (12) | La API completa con JWT reales y la seguridad activa: cada endpoint y cada código de error del contrato | `@MockitoBean` y `@MockitoSpyBean` para forzar 500 y 503 |
+| Frontend | `services/modoApi.test.js`, `pages/citas/PagoApi.test.jsx` | Rutas por rol, una sola llamada al pagar (201 / 402 / 409), 401 → `/login` | `fetch` simulado con `vi.stubGlobal` |
+| Contenedores | `verificar.ps1 -Solo docker` | 5 servicios, `validate` del esquema y peticiones de humo autenticadas contra MySQL y Nginx | No |
+
+## 4.17 Trazabilidad del backend
+
+| Requisito | Endpoints | Clases | Pruebas |
+| --- | --- | --- | --- |
+| RF-CIT-10 | `POST /api/citas` | `CitaController`, `CitaService.crear`, `ReglasCita`, `ReglasPago`, `AgendaDiaRepository` | `ApiCitasTest`, `CitaServiceTest`, `ReglasPagoTest`, humo |
+| RF-CIT-11 | `GET /api/citas/mias`, `/agenda`, `/api/citas`, `/{id}` | `CitaController`, `CitaService`, `UsuarioActual` | `ApiCitasTest`, `CitaServiceTest` |
+| RF-CIT-12 | `PATCH /api/citas/{id}/estado`, `/reprogramar` | `CitaService.cambiarEstado`, `reprogramar`, `ReglasCita.rolPuedeCambiarA`, `puedeCancelar` | `ApiCitasTest`, `CitaServiceTest`, `ReglasCitaTest` |
+| RF-CIT-13 | `GET /api/disponibilidad`, `/proximas` | `DisponibilidadController`, `DisponibilidadService`, `ClinicaClient` | `ReglasCitaTest`, `ApiCitasTest`, `ClinicaHttpTest` |
+| RF-CIT-14 | `GET /api/pagos/{id}`, `/api/pagos`, `/api/citas/estadisticas` | `PagoController`, `PagoService`, `ReglasCita.calcularEstadisticas` | `ApiCitasTest`, `ReglasCitaTest` |
+| RF-CIT-15 | `DELETE /api/citas/{id}` | `CitaService.eliminar` | `ApiCitasTest`, humo |
