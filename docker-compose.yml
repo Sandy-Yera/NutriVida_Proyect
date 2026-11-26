@@ -1,6 +1,8 @@
 # NutriVida completo en Docker: MySQL 8 + 3 microservicios + frontend con Nginx (proxy de /api).
 # Funciona igual en Windows, macOS y Linux. Solo requiere Docker (Docker Desktop en Windows/macOS).
 #
+#   .\scripts\levantar.ps1  (Windows)  o  ./scripts/levantar.sh  (Linux, macOS, Git Bash): todo en un paso
+#
 #   copy .env.example .env               (cp en Linux/macOS) y definir JWT_SECRET
 #   docker compose up -d --build         primera vez o después de cambiar código
 #   docker compose up -d                 siguientes veces
@@ -57,6 +59,13 @@ services:
     image: nutrivida/ms-usuarios:dev
     ports:
       - "8081:8081"
+    # S-40: "healthy" cuando Swagger responde (Spring ya conectó a MySQL y validó el esquema).
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-o", "/dev/null", "http://localhost:8081/v3/api-docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
 
   ms-citas:
     <<: *microservicio
@@ -75,6 +84,13 @@ services:
       SPRING_PROFILES_ACTIVE: ${MS_CITAS_PERFILES:-mysql}
     ports:
       - "8082:8082"
+    # S-40: "healthy" cuando Swagger responde (Spring ya conectó a MySQL y validó el esquema).
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-o", "/dev/null", "http://localhost:8082/v3/api-docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
 
   ms-clinica:
     <<: *microservicio
@@ -82,6 +98,13 @@ services:
     image: nutrivida/ms-clinica:dev
     ports:
       - "8083:8083"
+    # S-40: "healthy" cuando Swagger responde (Spring ya conectó a MySQL y validó el esquema).
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-o", "/dev/null", "http://localhost:8083/v3/api-docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
 
   # Frontend compilado + proxy: el navegador solo habla con este contenedor, que reparte /api/...
   # al microservicio dueño de cada ruta (mismas reglas que vite.config.js). Sin CORS.
@@ -92,10 +115,14 @@ services:
         VITE_API_MODE: ${VITE_API_MODE:-api}
     image: nutrivida/frontend:dev
     restart: unless-stopped
+    # S-40: Nginx parte cuando los 3 microservicios ya responden.
     depends_on:
-      - ms-usuarios
-      - ms-citas
-      - ms-clinica
+      ms-usuarios:
+        condition: service_healthy
+      ms-citas:
+        condition: service_healthy
+      ms-clinica:
+        condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:80"
 
