@@ -3,15 +3,15 @@
 # Para la extensión "REST Client" de VS Code (humao.rest-client): "Send Request" sobre cada bloque.
 # Requisito: docker compose up -d (ms-clinica en :8083 con MySQL y las semillas de 03_clinica.sql).
 #
-# Tokens: con el login de Gabriel (G-32), POST /api/auth/login en :8081. Mientras no esté, el
-# perfil dev de ms-citas (:8082/api/dev/token) firma con el mismo JWT_SECRET y ms-clinica lo acepta.
+# Tokens: login de ms-usuarios (POST /api/auth/login en :8081, G-32) con las cuentas demo de
+# database/01_usuarios.sql. ms-clinica lo valida con el mismo JWT_SECRET.
 # Orden sugerido: catálogo público → tokens → servicios (admin) → fichas (dueño, 403) → contactos.
 #
 # Semillas: U100 (paciente, ficha de NUT001), U101 (paciente, ficha de NUT002), U010 Carolina
 # (NUT001), U011 Rodrigo (NUT002), U002 secretaria, U001 admin.
 
 @base = http://localhost:8083
-@tokens = http://localhost:8082
+@tokens = http://localhost:8081
 
 # ============================================================== catálogo público (sin token)
 
@@ -31,38 +31,38 @@ GET {{base}}/api/servicios/XX999
 
 ###
 # @name tokenAdmin
-POST {{tokens}}/api/dev/token
+POST {{tokens}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U001","rol":"ADMIN","nombre":"Admin"}
+{"correo":"admin@nutrivida.cl","clave":"Admin2026!"}
 
 ###
 # @name tokenCarolina
-POST {{tokens}}/api/dev/token
+POST {{tokens}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U010","rol":"NUTRICIONISTA","nombre":"Carolina Fuentes","nutricionistaId":"NUT001"}
+{"correo":"cfuentes@nutrivida.cl","clave":"Nutri2026!"}
 
 ###
 # @name tokenRodrigo
-POST {{tokens}}/api/dev/token
+POST {{tokens}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U011","rol":"NUTRICIONISTA","nombre":"Rodrigo Sepúlveda","nutricionistaId":"NUT002"}
+{"correo":"rsepulveda@nutrivida.cl","clave":"Nutri2026!"}
 
 ###
 # @name tokenAna
-POST {{tokens}}/api/dev/token
+POST {{tokens}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U100","rol":"PACIENTE","nombre":"Ana Rojas"}
+{"correo":"javiera.soto@correo.cl","clave":"Paciente2026!"}
 
 ###
 # @name tokenSecretaria
-POST {{tokens}}/api/dev/token
+POST {{tokens}}/api/auth/login
 Content-Type: application/json
 
-{"id":"U002","rol":"SECRETARIA","nombre":"Secretaria"}
+{"correo":"recepcion@nutrivida.cl","clave":"Recepcion2026!"}
 
 # ============================================================== servicios (ADMIN)
 

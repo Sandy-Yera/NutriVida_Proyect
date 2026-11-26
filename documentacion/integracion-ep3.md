@@ -371,7 +371,7 @@ Las firmas no cambiaron. Con `VITE_API_MODE=api` cada función llama a su endpoi
 
 - **Errores en los formularios.** `FormContacto`, `FormFicha`, `FormPlan`, `FormMedicion` y `FormServicio` muestran `errores` bajo cada campo y `mensaje` arriba del botón, venga de la validación local o del backend.
 - **Catálogo con respaldo.** Si ms-clinica no responde, las lecturas del catálogo usan las semillas de EP2, igual que el modo `auto` de ms-citas. Crear, editar o desactivar nunca usan el respaldo.
-- **Token.** Mientras no exista el login (G-32), los dos services piden el token del perfil `dev` con `asegurarToken` (`tokenPuente.js`), igual que `citasService`.
+- **Token.** Desde la integración (§10) los dos services usan el token que guarda el login real (G-32); `tokenPuente.js` ya no existe.
 
 ### 9.2 Lo que ms-citas lee de ms-clinica (cumple la tabla de 7.3)
 
@@ -422,9 +422,9 @@ Orden: `gabriel-ep3` y `catalina-ep3` con `git merge --no-ff`. El único conflic
 ### 10.2 Pendientes
 
 - **Catalina (9.4.2):** quitar el respaldo local de `registrarContacto` ante un 401 y su prueba. Ya no hace falta.
-- **Simon (S-40 a S-43):** healthchecks, `levantar.ps1/.sh`, la parte de ms-usuarios y ms-clinica en `verificar.ps1`, guion del video e índice. Al unir `simon-ep3` habrá conflictos en `docker-compose.yml`, `.env.example` y `verificar.ps1`: hay que conservar los modos `http` y el perfil `mysql` de 10.1.
+- **Simon:** si sube su propia versión de S-40 a S-43, al unir `simon-ep3` habrá conflictos en `docker-compose.yml`, `.env.example`, `verificar.ps1` y los documentos de 10.4: conservar los modos `http`, el perfil `mysql` y los healthchecks.
+- **Capturas:** faltan las de `capturas/acceso/` (12, Gabriel) y `capturas/clinica/` (18, Catalina). Las de citas ya están.
 - **Opcionales:** 8.6.5, 8.6.6 y 9.4.6.
-- `manual-citas.md` todavía menciona el plan B del perfil dev (sección 1): lo actualiza Simon.
 
 ### 10.3 Verificación (26-11-2026)
 
@@ -432,3 +432,18 @@ Orden: `gabriel-ep3` y `catalina-ep3` con `git merge --no-ff`. El único conflic
 - Docker con los 5 contenedores y el `.env` sacado de `.env.example`: el login emite HS256, `POST /api/dev/token` da 404, ms-citas arranca en modo HTTP con ms-usuarios y ms-clinica, Mis citas, disponibilidad y servicios por el proxy, contacto anónimo con 201 y tildes correctas en las citas.
 - Navegador (Playwright, :8080): el recorrido de acceso (login, F5, 403, token vencido, eliminar, logout) y Mis citas sin llamadas a `/api/dev`.
 - `verificar.ps1` no se ejecutó en este equipo (sin PowerShell): correrlo en Windows antes de grabar.
+
+### 10.4 Tareas de Simon hechas en la integración (26-11-2026)
+
+Simon no alcanzó a subir `simon-ep3`. Para dejar la entrega completa, Gabriel hizo estas tareas; Simon debe revisarlas antes de la defensa.
+
+| Tarea | Archivos |
+| --- | --- |
+| S-40 arranque en un solo comando y healthchecks | `scripts/levantar.ps1`, `scripts/levantar.sh`, `docker-compose.yml` (healthcheck con `/v3/api-docs` en los 3 microservicios y el frontend con `depends_on: service_healthy`) |
+| S-41 pruebas de los 3 microservicios en `verificar.ps1` | `scripts/verificar.ps1` (omite con aviso un servicio sin pruebas) |
+| S-43 documento de integración y README | `documentacion/documento-integracion.md`, `documentacion/manual-usuario.md`, `README.md` |
+
+También se actualizaron las menciones al perfil `dev` en `manual-citas.md`, `manual-clinica.md`, `ep3/README.md`, §9.1 y `backend/ms-clinica/peticiones.http` (tokens desde el login).
+
+Verificación: `levantar.sh` con las imágenes armadas en el equipo crea el `.env`, espera los 4 *healthy* y Nginx parte después. `levantar.ps1` y `verificar.ps1` no se ejecutaron aquí (sin PowerShell): se prueban en Windows antes de grabar.
+

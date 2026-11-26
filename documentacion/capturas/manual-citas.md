@@ -17,7 +17,7 @@ Responsable: Simon. Capturas tomadas el 12-11-2026 con la app en Docker y en mod
 
 Tarjetas del pago simulado: **4242 4242 4242 4242** se aprueba y **4000 0000 0000 0002** se rechaza. Sirve cualquier vencimiento futuro (por ejemplo 12/30) y cualquier CVV de 3 dígitos.
 
-> Mientras el login de ms-usuarios (G-32) no esté listo, el token lo entrega el perfil `dev` de ms-citas sin que el usuario lo note (plan B). Para el video y la entrega se apaga con `MS_CITAS_PERFILES=mysql` en `.env`.
+> El token lo entrega el login de ms-usuarios (G-32) al iniciar sesión. El perfil `dev` de ms-citas ya no se usa: en la entrega `POST /api/dev/token` responde 404. Queda apagado con `MS_CITAS_PERFILES=mysql`, el valor de `.env.example`.
 
 ## 2. Paciente
 
@@ -75,7 +75,7 @@ El detalle muestra la cita, su historial y el comprobante del pago con los 4 úl
 
 ### 6.1 Swagger
 
-**http://localhost:8082/swagger-ui.html**. Los 13 endpoints de ms-citas, con ejemplos y códigos de respuesta. Para probar los protegidos, se pide un token con `POST /api/dev/token` (solo con el perfil `dev`) y se pega en **Authorize**. `backend/ms-citas/peticiones.http` tiene el mismo recorrido para la extensión REST Client de VS Code.
+**http://localhost:8082/swagger-ui.html**. Los 13 endpoints de ms-citas, con ejemplos y códigos de respuesta. Para probar los protegidos, se pide un token con `POST http://localhost:8081/api/auth/login` (cuentas demo de la sección 1) y se pega en **Authorize**. `backend/ms-citas/peticiones.http` tiene el mismo recorrido para la extensión REST Client de VS Code.
 
 ![Swagger de ms-citas](citas/01-swagger-ms-citas.png)
 

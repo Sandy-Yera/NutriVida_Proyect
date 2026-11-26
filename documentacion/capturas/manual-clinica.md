@@ -16,7 +16,7 @@ Responsable: Catalina. Capturas con la app en Docker y en modo API (`VITE_API_MO
 | Secretaria                       | `recepcion@nutrivida.cl`  | `Recepcion2026!` | Bandeja de contactos (Swagger) |
 | Administrador                    | `admin@nutrivida.cl`      | `Admin2026!`     | Servicios                      |
 
-> Mientras el login de ms-usuarios (G-32) no esté, el token lo entrega el perfil `dev` de ms-citas sin que el usuario lo note (plan B). Para Swagger, el token se pide con `POST http://localhost:8082/api/dev/token` (ver `backend/ms-clinica/peticiones.http`) o, con el login listo, con `POST /api/auth/login`.
+> El token lo entrega el login de ms-usuarios (G-32). Para Swagger, se pide con `POST http://localhost:8081/api/auth/login` (ver `backend/ms-clinica/peticiones.http`) y se pega en **Authorize**.
 
 ## 2. Capturas a tomar
 

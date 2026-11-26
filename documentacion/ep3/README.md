@@ -61,7 +61,7 @@ Material oficial del curso (en el PC de Simon, fuera del repo): `Documentacion/e
   - `.\scripts\verificar.ps1` da PASA: 156 JUnit, PIT, 456 Vitest, Docker y peticiones de humo.
   - Documentación: [`../integracion-ep3.md`](../integracion-ep3.md) §7, [`../ers/04-citas.md`](../ers/04-citas.md) (V3) y [`../capturas/manual-citas.md`](../capturas/manual-citas.md).
 - **Siguiente:** el video (R11), que graba Simon. Antes de grabar, ver "R11 · Preparación del video" en el roadmap.
-- **Depende de otros:** el login (G-32, Gabriel) y los catálogos de ms-clinica (C-31, Catalina). Mientras no estén, ms-citas usa las semillas de EP2 y el perfil `dev`. Lo que hay que hacer cuando lleguen está en `integracion-ep3.md` §7.6.
+- **Depende de otros:** el login (G-32, Gabriel) y los catálogos de ms-clinica (C-31, Catalina). Ya están: la integración en `main` del 26-11-2026 está en `integracion-ep3.md` §10, y el documento para la entrega es [`../documento-integracion.md`](../documento-integracion.md).
 - **Notas del entorno:**
   - El PC de Simon usa Java 25 localmente. En Docker siempre es Java 21.
   - `mvnw.cmd` fue corregido para rutas con espacios ("Semestre 4").
