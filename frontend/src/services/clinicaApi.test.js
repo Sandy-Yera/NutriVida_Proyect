@@ -9,7 +9,7 @@ import {
   obtenerPlan,
   registrarMedicion,
 } from "./fichasService.js";
-import { borrarToken } from "./http.js";
+import { borrarToken, guardarToken } from "./http.js";
 import {
   actualizarFotoNutricionista,
   cambiarEstadoServicio,
@@ -22,10 +22,17 @@ import {
 } from "./serviciosService.js";
 
 // C-34: serviciosService y fichasService en modo API (VITE_API_MODE=api) contra un ms-clinica
-// simulado con fetch. Las demás pruebas siguen en modo local. Mientras no hay login real (G-32),
-// el token sale del perfil dev (tokenPuente), igual que en citasService.
+// simulado con fetch. Las demás pruebas siguen en modo local. El token es el del login real
+// (G-32): entrar() lo deja guardado como lo haría Login.jsx.
 
 const tokenDe = (sub) => `x.${btoa(JSON.stringify({ sub, rol: "X" }))}.firma`;
+
+// Sesión de EP2 más el token que guardaría el login real.
+function entrar(correo, clave) {
+  const resultado = iniciarSesion(correo, clave);
+  guardarToken(tokenDe(resultado.usuario.id));
+  return resultado;
+}
 
 const SERVICIO = { codigo: "CN001", tipo: "CONSULTA", nombre: "Primera consulta", precio: 35000 };
 const FICHA = { id: "U100", nutricionistaId: "NUT001", objetivo: "PERDIDA_PESO" };
@@ -42,17 +49,15 @@ function responder(status, cuerpo) {
   };
 }
 
-// Llamadas a ms-clinica (sin las del token del perfil dev).
+// Llamadas a ms-clinica.
 function llamadas() {
-  return fetchMock.mock.calls
-    .filter(([url]) => url !== "/api/dev/token")
-    .map(([url, opciones]) => ({
-      url,
-      metodo: opciones?.method ?? "GET",
-      token: opciones?.headers?.Authorization,
-      body: opciones?.body,
-      cuerpo: typeof opciones?.body === "string" ? JSON.parse(opciones.body) : undefined,
-    }));
+  return fetchMock.mock.calls.map(([url, opciones]) => ({
+    url,
+    metodo: opciones?.method ?? "GET",
+    token: opciones?.headers?.Authorization,
+    body: opciones?.body,
+    cuerpo: typeof opciones?.body === "string" ? JSON.parse(opciones.body) : undefined,
+  }));
 }
 
 beforeEach(() => {
@@ -62,10 +67,6 @@ beforeEach(() => {
   rutas = {};
   fetchMock = vi.fn(async (url, opciones) => {
     const metodo = opciones?.method ?? "GET";
-    if (url === "/api/dev/token") {
-      const { id } = JSON.parse(opciones.body);
-      return responder(200, { token: tokenDe(id) });
-    }
     const [status, cuerpo] = rutas[`${metodo} ${url.split("?")[0]}`] ?? [
       404,
       { status: 404, mensaje: "La ruta solicitada no existe." },
@@ -108,7 +109,7 @@ describe("modo API: catálogo de ms-clinica", () => {
   });
 
   it("crear un servicio sin conexión no usa el respaldo: avisa el error", async () => {
-    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+    entrar("admin@nutrivida.cl", "Admin2026!");
     fetchMock.mockImplementation(async () => {
       throw new TypeError("Failed to fetch");
     });
@@ -124,7 +125,7 @@ describe("modo API: catálogo de ms-clinica", () => {
 });
 
 describe("modo API: administración de servicios", () => {
-  beforeEach(() => iniciarSesion("admin@nutrivida.cl", "Admin2026!"));
+  beforeEach(() => entrar("admin@nutrivida.cl", "Admin2026!"));
 
   it("crearServicio envía números (no texto) con el token del admin", async () => {
     rutas["POST /api/servicios"] = [201, { ...SERVICIO, codigo: "CN006" }];
@@ -163,7 +164,7 @@ describe("modo API: administración de servicios", () => {
 
 describe("modo API: foto del nutricionista", () => {
   it("sube la foto como multipart (parte foto)", async () => {
-    iniciarSesion("cfuentes@nutrivida.cl", "Nutri2026!");
+    entrar("cfuentes@nutrivida.cl", "Nutri2026!");
     rutas["PUT /api/nutricionistas/NUT001/foto"] = [200, { id: "NUT001", fotoUrl: "/api/x?v=1" }];
     const archivo = new File([new Uint8Array([1, 2, 3])], "yo.png", { type: "image/png" });
 
@@ -177,7 +178,7 @@ describe("modo API: foto del nutricionista", () => {
   });
 
   it("al quitar la foto devuelve el nutricionista actualizado", async () => {
-    iniciarSesion("cfuentes@nutrivida.cl", "Nutri2026!");
+    entrar("cfuentes@nutrivida.cl", "Nutri2026!");
     rutas["DELETE /api/nutricionistas/NUT001/foto"] = [204];
     rutas["GET /api/nutricionistas/NUT001"] = [200, { id: "NUT001", fotoUrl: null }];
 
@@ -187,7 +188,7 @@ describe("modo API: foto del nutricionista", () => {
 
 describe("modo API: contacto", () => {
   it("con sesión lo envía a ms-clinica", async () => {
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
+    entrar("javiera.soto@correo.cl", "Paciente2026!");
     rutas["POST /api/contactos"] = [201, { id: "CT003" }];
     expect(await registrarContacto({ nombre: "Ana" })).toEqual({ id: "CT003" });
   });
@@ -218,7 +219,7 @@ describe("modo API: contacto", () => {
 });
 
 describe("modo API: fichasService", () => {
-  beforeEach(() => iniciarSesion("cfuentes@nutrivida.cl", "Nutri2026!"));
+  beforeEach(() => entrar("cfuentes@nutrivida.cl", "Nutri2026!"));
 
   it("listarPacientes pide los del nutricionista con su token", async () => {
     rutas["GET /api/pacientes"] = [200, [FICHA]];

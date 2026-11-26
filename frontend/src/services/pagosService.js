@@ -2,7 +2,6 @@ import * as pagosData from "../data/pagosData.js";
 import { simularPago, soloDigitos, validarPago } from "../utils/pagos.js";
 import { errorConflicto, errorNoEncontrado, errorValidacion } from "../utils/errores.js";
 import { apiFetch, apiFetchONull, query, usarApi } from "./http.js";
-import { asegurarToken } from "./tokenPuente.js";
 
 // Modo API (EP3, R9): ms-citas no tiene POST /api/pagos. El pago se hace junto con la cita
 // en POST /api/citas (citasService.pagarYCrearCita), así que procesarPago y
@@ -44,7 +43,6 @@ export async function reembolsarPagoSinCita(id) {
 
 export async function obtenerPago(id) {
   if (usarApi()) {
-    await asegurarToken();
     return apiFetchONull(`/api/pagos/${encodeURIComponent(id)}`);
   }
   return pagosData.obtener(id);
@@ -54,7 +52,6 @@ export async function obtenerPago(id) {
 // Es una función nueva: no cambia el contrato.
 export async function listarPagos({ citaIds } = {}) {
   if (usarApi()) {
-    await asegurarToken();
     return apiFetch(`/api/pagos${query({ citaIds: citaIds?.join(",") })}`);
   }
   const pagos = pagosData.listar();

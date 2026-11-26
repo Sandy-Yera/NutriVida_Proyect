@@ -11,13 +11,12 @@ import {
   proximasHorasLibres,
   reprogramarCita,
 } from "./citasService.js";
-import { CLAVE_TOKEN, leerToken, usarApi } from "./http.js";
+import { guardarToken, usarApi } from "./http.js";
 import { listarPagos, obtenerPago, procesarPago } from "./pagosService.js";
-import { usuarioDelToken } from "./tokenPuente.js";
 
 // R9: los services de citas y pagos en modo API (VITE_API_MODE=api), contra un ms-citas
 // simulado con fetch. Las demás pruebas de Vitest siguen en modo local sin cambios.
-// Mientras no hay login real (G-32), el token sale del perfil dev de ms-citas (tokenPuente).
+// El token es el del login real (G-32): entrar() lo deja guardado como lo haría Login.jsx.
 
 const tokenDe = (sub) => `x.${btoa(JSON.stringify({ sub, rol: "X" }))}.firma`;
 
@@ -58,17 +57,20 @@ function llamadas() {
   }));
 }
 
-const aApi = () => llamadas().filter((l) => l.url !== "/api/dev/token");
+const aApi = () => llamadas();
+
+// Sesión de EP2 más el token que guardaría el login real.
+function entrar(correo, clave) {
+  const resultado = iniciarSesion(correo, clave);
+  guardarToken(tokenDe(resultado.usuario.id));
+  return resultado;
+}
 
 beforeEach(() => {
   vi.stubEnv("VITE_API_MODE", "api");
   rutas = {};
   fetchMock = vi.fn(async (url, opciones) => {
     const clave = `${opciones?.method ?? "GET"} ${url.split("?")[0]}`;
-    if (clave === "POST /api/dev/token") {
-      const { id } = JSON.parse(opciones.body);
-      return responder(200, { token: tokenDe(id) });
-    }
     const [status, cuerpo] = rutas[clave] ?? [
       404,
       { status: 404, mensaje: "La ruta solicitada no existe." },
@@ -83,47 +85,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("modo API: puente de token (plan B de G-32)", () => {
+describe("modo API: token del login", () => {
   it("usarApi() responde true con VITE_API_MODE=api", () => {
     expect(usarApi()).toBe(true);
   });
 
-  it("cambia la sesión local por un token del perfil dev y lo reutiliza", async () => {
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
+  it("usa el token guardado por el login y no pide /api/dev/token", async () => {
+    entrar("javiera.soto@correo.cl", "Paciente2026!");
     rutas["GET /api/citas/mias"] = [200, [CITA]];
 
     await listarCitas({ pacienteId: "U100" });
-    await listarCitas({ pacienteId: "U100" });
 
-    const pedidos = llamadas().filter((l) => l.url === "/api/dev/token");
-    expect(pedidos).toHaveLength(1);
-    expect(pedidos[0].cuerpo).toMatchObject({ id: "U100", rol: "PACIENTE" });
-    expect(usuarioDelToken(leerToken())).toBe("U100");
-    expect(aApi().every((l) => l.token === `Bearer ${tokenDe("U100")}`)).toBe(true);
-  });
-
-  it("si el token guardado es de otro usuario, pide uno nuevo", async () => {
-    localStorage.setItem(CLAVE_TOKEN, tokenDe("U101"));
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
-    rutas["GET /api/citas/mias"] = [200, []];
-
-    await listarCitas({ pacienteId: "U100" });
-
-    expect(usuarioDelToken(leerToken())).toBe("U100");
-  });
-
-  it("sin el perfil dev (404, como en la entrega) no inventa token", async () => {
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
-    fetchMock.mockImplementation(async () =>
-      responder(404, { status: 404, mensaje: "La ruta solicitada no existe." }),
-    );
-
-    await expect(listarCitas({ pacienteId: "U100" })).rejects.toMatchObject({ estado: 404 });
-    expect(leerToken()).toBeNull();
-  });
-
-  it("usuarioDelToken devuelve null con un texto que no es JWT", () => {
-    expect(usuarioDelToken("no-es-un-jwt")).toBeNull();
+    expect(llamadas().map((l) => l.url)).toEqual(["/api/citas/mias"]);
+    expect(llamadas()[0].token).toBe(`Bearer ${tokenDe("U100")}`);
   });
 });
 
@@ -133,13 +107,13 @@ describe("modo API: citasService", () => {
     rutas["GET /api/citas/agenda"] = [200, [CITA]];
     rutas["GET /api/citas"] = [200, [CITA]];
 
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
+    entrar("javiera.soto@correo.cl", "Paciente2026!");
     expect(await listarCitas({ pacienteId: "U100", estado: "PENDIENTE" })).toEqual([CITA]);
 
-    iniciarSesion("cfuentes@nutrivida.cl", "Nutri2026!");
+    entrar("cfuentes@nutrivida.cl", "Nutri2026!");
     await listarCitas({ nutricionistaId: "NUT001", desde: "2026-11-23", hasta: "2026-11-29" });
 
-    iniciarSesion("recepcion@nutrivida.cl", "Recepcion2026!");
+    entrar("recepcion@nutrivida.cl", "Recepcion2026!");
     await listarCitas({ estado: "PENDIENTE" });
 
     expect(aApi().map((l) => l.url)).toEqual([
@@ -150,7 +124,7 @@ describe("modo API: citasService", () => {
   });
 
   it("obtenerCita devuelve null con 404, como en modo local", async () => {
-    iniciarSesion("recepcion@nutrivida.cl", "Recepcion2026!");
+    entrar("recepcion@nutrivida.cl", "Recepcion2026!");
     rutas["GET /api/citas/C0006"] = [200, CITA];
 
     expect(await obtenerCita("C0006")).toEqual(CITA);
@@ -158,7 +132,7 @@ describe("modo API: citasService", () => {
   });
 
   it("pagarYCrearCita: una sola llamada con la reserva y la tarjeta; 201 → aprobado", async () => {
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
+    entrar("javiera.soto@correo.cl", "Paciente2026!");
     rutas["POST /api/citas"] = [201, CITA];
     const reserva = {
       servicioCodigo: "CN002",
@@ -189,7 +163,7 @@ describe("modo API: citasService", () => {
   });
 
   it("pagarYCrearCita: 402 → { aprobado: false, motivo }; 409 se lanza con su campo", async () => {
-    iniciarSesion("javiera.soto@correo.cl", "Paciente2026!");
+    entrar("javiera.soto@correo.cl", "Paciente2026!");
     const reserva = {
       servicioCodigo: "CN002",
       nutricionistaId: "NUT001",
@@ -218,7 +192,7 @@ describe("modo API: citasService", () => {
   });
 
   it("cambiarEstado y reprogramarCita mandan solo el dato que cambia: el usuario sale del token", async () => {
-    iniciarSesion("recepcion@nutrivida.cl", "Recepcion2026!");
+    entrar("recepcion@nutrivida.cl", "Recepcion2026!");
     rutas["PATCH /api/citas/C0006/estado"] = [200, { ...CITA, estado: "CONFIRMADA" }];
     rutas["PATCH /api/citas/C0006/reprogramar"] = [200, { ...CITA, hora: "11:00" }];
 
@@ -250,7 +224,7 @@ describe("modo API: citasService", () => {
   });
 
   it("estadisticas va a /api/citas/estadisticas con el período", async () => {
-    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+    entrar("admin@nutrivida.cl", "Admin2026!");
     rutas["GET /api/citas/estadisticas"] = [200, { total: 0 }];
 
     expect(await estadisticas("2026-11-01", "2026-11-30")).toEqual({ total: 0 });
@@ -265,7 +239,7 @@ describe("modo API: citasService", () => {
 
 describe("modo API: pagosService", () => {
   it("comprobante y lista del admin se leen de ms-citas", async () => {
-    iniciarSesion("admin@nutrivida.cl", "Admin2026!");
+    entrar("admin@nutrivida.cl", "Admin2026!");
     rutas["GET /api/pagos/P0006"] = [200, { id: "P0006", citaId: "C0006" }];
     rutas["GET /api/pagos"] = [200, []];
 

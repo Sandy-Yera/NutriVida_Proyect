@@ -2,18 +2,14 @@ import * as fichasData from "../data/fichasData.js";
 import { obtenerSesion } from "../auth/auth.js";
 import { errorNoAutenticado, errorNoEncontrado, errorProhibido } from "../utils/errores.js";
 import { apiFetch, apiFetchONull, query, usarApi } from "./http.js";
-import { asegurarToken } from "./tokenPuente.js";
 
 // Modo API (EP3, C-34): las mismas firmas contra /api/pacientes de ms-clinica. Las reglas de
 // abajo las vuelve a aplicar el backend con el usuario del token (403 si la ficha es ajena).
-// asegurarToken es el plan B de G-32 (token del perfil dev); se quita al llegar el login.
 async function conToken(ruta, opciones) {
-  await asegurarToken();
   return apiFetch(ruta, opciones);
 }
 
 async function conTokenONull(ruta) {
-  await asegurarToken();
   return apiFetchONull(ruta);
 }
 

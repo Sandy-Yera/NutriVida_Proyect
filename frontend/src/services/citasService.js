@@ -9,7 +9,6 @@ import {
 } from "../utils/errores.js";
 import { exigirActor } from "./actor.js";
 import { apiFetch, apiFetchONull, query, usarApi } from "./http.js";
-import { asegurarToken } from "./tokenPuente.js";
 import { obtenerSesion } from "../auth/auth.js";
 import { obtener as obtenerUsuarioData } from "../data/usuariosData.js";
 import {
@@ -25,7 +24,6 @@ const esPresencial = (servicio) => servicio.modalidad.startsWith("Presencial");
 // backend (con el usuario del token, no el usuarioId que entrega la página) y devuelve las
 // citas con la misma forma de EP2, así los componentes no cambian.
 async function conToken(ruta, opciones) {
-  await asegurarToken();
   return apiFetch(ruta, opciones);
 }
 
@@ -75,7 +73,6 @@ export async function listarCitas({ pacienteId, nutricionistaId, estado, desde, 
 
 export async function obtenerCita(id) {
   if (usarApi()) {
-    await asegurarToken();
     return apiFetchONull(`/api/citas/${encodeURIComponent(id)}`);
   }
   return citasData.obtener(id);

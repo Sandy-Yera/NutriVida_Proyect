@@ -10,14 +10,11 @@ import {
 } from "../utils/errores.js";
 import { prepararFoto, TIPOS_FOTO, validarArchivoFoto } from "../utils/fotos.js";
 import { apiFetch, apiFetchONull, leerToken, query, usarApi } from "./http.js";
-import { asegurarToken } from "./tokenPuente.js";
 
 // Modo API (EP3, C-34): mismas firmas, contra ms-clinica (contrato §1: /api/servicios,
 // /api/nutricionistas y /api/contactos). Los permisos los aplica el backend con el token; los
 // errores llegan con el formato común y los formularios los muestran igual que en modo local.
-// asegurarToken es el plan B de G-32 (token del perfil dev); se quita al llegar el login.
 async function conToken(ruta, opciones) {
-  await asegurarToken();
   return apiFetch(ruta, opciones);
 }
 
