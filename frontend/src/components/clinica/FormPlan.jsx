@@ -16,6 +16,7 @@ function datosIniciales(plan) {
 export default function FormPlan({ plan, onGuardar }) {
   const [datos, setDatos] = useState(() => datosIniciales(plan));
   const [errores, setErrores] = useState({});
+  const [errorGeneral, setErrorGeneral] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
 
@@ -44,6 +45,7 @@ export default function FormPlan({ plan, onGuardar }) {
 
   async function manejarEnvio(evento) {
     evento.preventDefault();
+    setErrorGeneral("");
     const nuevosErrores = validarPlan(datos);
     setErrores(nuevosErrores);
     const primerCampoConError = Object.keys(nuevosErrores)[0];
@@ -62,6 +64,10 @@ export default function FormPlan({ plan, onGuardar }) {
         indicaciones: datos.indicaciones.trim(),
       });
       setGuardado(true);
+    } catch (error) {
+      // Errores del backend (contrato EP3): por campo bajo cada input y el mensaje arriba del botón.
+      setErrores(error.errores ?? (error.campo ? { [error.campo]: error.message } : {}));
+      setErrorGeneral(error.message);
     } finally {
       setGuardando(false);
     }
@@ -104,6 +110,13 @@ export default function FormPlan({ plan, onGuardar }) {
           </label>
           <textarea rows={2} maxLength={500} {...propsCampo("indicaciones", datos.indicaciones)} />
         </div>
+        {errorGeneral && (
+          <div className="col-12">
+            <div className="alert alert-danger py-2 mb-0" role="alert">
+              {errorGeneral}
+            </div>
+          </div>
+        )}
         {guardado && (
           <div className="col-12">
             <div className="alert alert-success py-2 mb-0" role="status">

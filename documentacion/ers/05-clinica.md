@@ -1,6 +1,6 @@
 # 5. Módulo clínico: sitio público y ficha clínica
 
-Responsable: Catalina. Tareas C-01 a C-12 del plan del proyecto. ERS V2 (EP2, frontend React con datos simulados).
+Responsable: Catalina. Tareas C-01 a C-12 (EP2) y C-30 a C-35 (EP3) del plan del proyecto. **ERS V3** (EP3: el frontend de EP2 más el microservicio ms-clinica con Spring Boot y MySQL). Las secciones 5.1 a 5.9 son las de la V2 y siguen vigentes. Lo que agrega la V3 está en las secciones 5.10 a 5.15.
 
 ## 5.1 Alcance
 
@@ -236,3 +236,107 @@ El caso no entrega estos datos; se usan valores referenciales y se declaran aqu�
 | Mediciones y planes | Javiera Soto: 5 mediciones de julio a octubre de 2026 y plan de 1.800 kcal; Tomás Huenchullán: 2 mediciones y plan deportivo; Ana Pérez: sin ficha | Permiten demostrar el gráfico, la privacidad entre nutricionistas y "Crear ficha". |
 | Motivos de contacto | Consulta general, Agendamiento de horas, Planes y precios, Talleres grupales y Otro | Cubren las consultas habituales de una clínica. |
 | Modalidades | Presencial, Online (video) y Presencial (grupo) | Las que usa el catálogo de 18 servicios. |
+
+## 5.10 Versión 3 (EP3): ms-clinica
+
+En EP3 el catálogo, el equipo, las fichas y los contactos pasan del navegador a **ms-clinica**, un microservicio Spring Boot en el puerto 8083 con su propio esquema MySQL, `nutrivida_clinica`. Las pantallas de 5.3 no cambian: con `VITE_API_MODE=api`, `serviciosService` y `fichasService` llaman a la API en vez de a `data/` (modo dual). El contrato común está en `documentacion/ep3/contrato-backend.md` y el manual con capturas en `documentacion/capturas/manual-clinica.md`.
+
+```text
+React (:8080) → Nginx → ms-clinica (:8083) → MySQL nutrivida_clinica
+                              ↑
+            ms-citas (:8082) lee GET /api/servicios y GET /api/nutricionistas
+```
+
+## 5.11 Requisitos funcionales del backend
+
+### RF-CLI-09 Catálogo público de servicios y equipo
+
+- **Endpoints:** `GET /api/servicios?tipo&texto&soloActivos`, `GET /api/servicios/{codigo}`, `GET /api/nutricionistas`, `GET /api/nutricionistas/{id}` y `GET /api/nutricionistas/{id}/foto`. Sin token.
+- **Reglas:** mismo orden y filtros que `filtrarServicios` de EP2 (por tipo y por texto sin tildes). Por defecto solo los activos; `soloActivos=false` también trae los desactivados, que las citas antiguas necesitan para mostrar el nombre. Listas completas, sin paginar: ms-citas las lee así (`ClinicaHttp`).
+- **Respuestas:** 200 · 404 ("El servicio no existe." / "El nutricionista no existe.").
+- **Criterio de aceptación:** ms-citas en modo `http` arma la disponibilidad y crea citas con estos datos sin cambios en su código.
+- **Pruebas:** `CatalogoTest` y, contra Docker, `GET /api/disponibilidad` con `NUTRIVIDA_CLINICA_MODO=http`.
+
+### RF-CLI-10 Administrar servicios
+
+- **Endpoints:** `POST /api/servicios`, `PATCH /api/servicios/{codigo}` y `PATCH /api/servicios/{codigo}/estado` (ADMIN).
+- **Reglas:** `validarServicio` de EP2 con los mismos mensajes (código AA000, tipo, nombre de 3 a 80, duración de 10 a 240 salvo planes, precio entero mayor que 0, descripción de 10 a 300, cupo de 1 a 50 en talleres). Un plan no guarda duración y solo un taller guarda cupo. **No hay DELETE:** las citas guardan el código, así que se desactiva.
+- **Respuestas:** 201 · 200 · 400 con `errores` por campo · 404 · 409 "Ya existe un servicio con ese código.".
+- **Pruebas:** `ReglasClinicaTest`, `ApiClinicaTest`, `SeguridadClinicaTest`.
+
+### RF-CLI-11 Foto de perfil del nutricionista
+
+- **Endpoints:** `PUT /api/nutricionistas/{id}/foto` (multipart, parte `foto`) y `DELETE /api/nutricionistas/{id}/foto`.
+- **Reglas:** solo el propio nutricionista o el admin ("Solo puedes cambiar tu propia foto."). JPG, PNG o WebP de hasta 2 MB. `fotoUrl` lleva `?v=` con la fecha de la última subida.
+- **Respuestas:** 200 · 204 · 403 · 413 · 415.
+- **Pruebas:** `ApiClinicaTest` (subir, descargar, quitar y los tres errores).
+
+### RF-CLI-12 Pacientes y ficha clínica con regla de dueño
+
+- **Endpoints:** `GET /api/pacientes?nutricionistaId` (NUTRICIONISTA y ADMIN), `GET /api/pacientes/{id}` y `POST /api/pacientes` (NUTRICIONISTA).
+- **Reglas:** las de `fichasService` de EP2, ahora con el usuario del token. El nutricionista ve solo sus pacientes (403 "Solo puedes ver tus propios pacientes."). La ficha completa la ven el nutricionista a cargo, el admin y el propio paciente; otro nutricionista recibe solo `{ id, nutricionistaId }`; la secretaria y otro paciente, 403. La ficha nueva queda a nombre del token.
+- **Respuestas:** 200 · 201 · 400 · 403 · 404 "El paciente no tiene ficha." · 409 "Este paciente ya tiene ficha.".
+- **Pruebas:** `ApiClinicaTest`, `SeguridadClinicaTest`.
+
+### RF-CLI-13 Mediciones y plan alimentario
+
+- **Endpoints:** `GET` y `POST /api/pacientes/{id}/mediciones`, `GET` y `PUT /api/pacientes/{id}/plan`.
+- **Reglas:** leen el nutricionista a cargo, el admin y el propio paciente; escribe solo el nutricionista a cargo (403 "Solo el nutricionista a cargo puede modificar esta ficha."). Rangos y mensajes de `validarMedicion` (C-T4) y `validarPlan`. La fecha de la medición no puede ser futura. El plan sin `id` crea uno nuevo vigente desde hoy; con el `id` de uno del paciente, lo corrige.
+- **Respuestas:** 200 · 201 · 400 "La medición tiene datos fuera de rango." con `errores` · 403 · 404.
+- **Pruebas:** `ReglasClinicaTest`, `ApiClinicaTest`.
+
+### RF-CLI-14 Contactos
+
+- **Endpoints:** `POST /api/contactos`, `GET /api/contactos` (ADMIN y SECRETARIA) y `DELETE /api/contactos/{id}` (ADMIN).
+- **Reglas:** `validarContacto` de EP2. El correo se guarda en minúsculas y el teléfono sin espacios. El POST debe ser público; hasta que `SecurityConfig` lo declare (tarea de integración), pide token y el frontend guarda en el navegador el mensaje de un visitante sin sesión.
+- **Respuestas:** 201 · 400 · 204 · 404.
+- **Pruebas:** `ReglasClinicaTest`, `ApiClinicaTest`, `SeguridadClinicaTest`.
+
+## 5.12 Datos en MySQL (`database/03_clinica.sql`)
+
+| Tabla                | Campos principales                                                                                    | Restricciones                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `servicio`           | codigo, tipo, nombre, duracion_min, modalidad, precio, descripcion, destacado, cupo_max, activo       | `CHECK` de código, tipo, modalidad, precio > 0, duración 10-240 y cupo 1-50 |
+| `nutricionista`      | id, usuario_id, nombre, especialidad, hora_inicio, hora_fin                                           | `UNIQUE (usuario_id)`, inicio antes del fin                                 |
+| `nutricionista_dia`  | nutricionista_id, dia                                                                                 | 1FN: un día por fila, 0 = domingo como en EP2                               |
+| `nutricionista_foto` | nutricionista_id, tipo, datos, actualizada_en                                                         | Aparte para no cargar la imagen al listar                                   |
+| `ficha`              | paciente_id, nutricionista_id, objetivo, antecedentes, creada_en                                      | PK = paciente (una ficha por paciente), FK al nutricionista                 |
+| `medicion`           | id, paciente_id, nutricionista_id, fecha, peso_kg, talla_cm, cintura_cm, cadera_cm, grasa_pct, notas  | FK a `ficha`, `CHECK` con los rangos de C-T4                                |
+| `plan_alimentario`   | id, paciente_id, nutricionista_id, vigente_desde, objetivo, kcal_diarias, las 5 comidas, indicaciones | FK a `ficha`, kcal 800-5000                                                 |
+| `contacto`           | id, nombre, correo, telefono, motivo, mensaje, fecha                                                  | Mensaje de 10 a 500                                                         |
+| `contador`           | nombre, ultimo                                                                                        | IDs con el formato de EP2 (`M0008`, `PA003`, `CT003`) sin repetir           |
+
+- `usuario_id` y `paciente_id` son referencias por valor a `nutrivida_usuarios`: **sin claves foráneas a otros esquemas**.
+- Semillas de EP2: 18 servicios, NUT001 a NUT004 con su jornada, fichas de U100 y U101, 7 mediciones y 2 planes. El script empieza con `SET NAMES utf8mb4` para que los acentos no queden mal codificados.
+- Hibernate arranca con `ddl-auto=validate`. En el perfil por defecto (H2) las mismas semillas se cargan desde `data.sql`.
+
+## 5.13 Requisitos no funcionales del backend
+
+- **Seguridad:** JWT de ms-usuarios validado con el mismo `JWT_SECRET`. Rol con `@PreAuthorize` en el controlador y dueño en `FichaService` con `UsuarioActual`.
+- **Integridad:** cada operación que revisa una regla y escribe es un `@Transactional`. Los IDs salen de la fila `contador` bloqueada (`SELECT … FOR UPDATE`). PK, FK y `CHECK` como última barrera.
+- **Errores:** todo error responde con el JSON común. Los formularios de React muestran `errores` bajo cada campo y `mensaje` arriba del botón.
+- **Disponibilidad:** las lecturas del catálogo en el frontend usan las semillas de EP2 si ms-clinica no responde, igual que el modo `auto` de ms-citas. Las escrituras nunca.
+- **Documentación:** Swagger en `http://localhost:8083/swagger-ui.html`, con Authorize, ejemplos en cada cuerpo y códigos de respuesta. `backend/ms-clinica/peticiones.http` sirve de guion.
+
+## 5.14 Registro de pruebas del backend
+
+80 pruebas JUnit en `backend/ms-clinica/src/test/java` (`mvn test`) y 17 de Vitest para el modo API (473 en total en el frontend).
+
+| Nivel        | Clases                                    | Qué verifican                                                                                      | Mock o spy                            |
+| ------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Reglas puras | `ReglasClinicaTest` (7)                   | Espejo de `clinica.test.js`: C-T4, contacto, ficha, plan, servicio y búsqueda sin tildes           | No                                    |
+| Repositorio  | `RepositoriosTest` (4)                    | Semillas, jornada, plan vigente y contador sobre H2                                                | No                                    |
+| API          | `CatalogoTest` (6), `ApiClinicaTest` (13) | Forma que lee ms-citas, filtros, CRUD, foto, fichas, mediciones, planes y contactos con JWT reales | No (H2 y `@Transactional` por prueba) |
+| Seguridad    | `SeguridadClinicaTest` (50)               | Matriz de 47 filas endpoint × rol (401/403/200/201/204), los tres 401 y Swagger público            | No                                    |
+| Frontend     | `services/clinicaApi.test.js` (17)        | Rutas, cuerpos numéricos, multipart, 404 → `null`, 403 y 409 con su mensaje, respaldo del catálogo | `fetch` simulado con `vi.stubGlobal`  |
+
+## 5.15 Trazabilidad del backend
+
+| Requisito | Endpoints                                    | Clases                                                                                     | Pruebas                                                       |
+| --------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| RF-CLI-09 | `GET /api/servicios`, `/api/nutricionistas`  | `ServicioController`, `NutricionistaController`, `ServicioService`, `NutricionistaService` | `CatalogoTest`                                                |
+| RF-CLI-10 | `POST`/`PATCH /api/servicios`                | `ServicioService`, `ReglasClinica.validarServicio`                                         | `ApiClinicaTest`, `ReglasClinicaTest`, `SeguridadClinicaTest` |
+| RF-CLI-11 | `PUT`/`DELETE /api/nutricionistas/{id}/foto` | `NutricionistaService`, `FotoNutricionista`                                                | `ApiClinicaTest`                                              |
+| RF-CLI-12 | `/api/pacientes`, `/api/pacientes/{id}`      | `PacienteController`, `FichaService`                                                       | `ApiClinicaTest`, `SeguridadClinicaTest`                      |
+| RF-CLI-13 | `/api/pacientes/{id}/mediciones`, `/plan`    | `FichaService`, `Correlativos`, `ReglasClinica`                                            | `ApiClinicaTest`, `ReglasClinicaTest`                         |
+| RF-CLI-14 | `/api/contactos`                             | `ContactoController`, `ContactoService`                                                    | `ApiClinicaTest`, `SeguridadClinicaTest`                      |

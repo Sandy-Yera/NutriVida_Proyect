@@ -73,9 +73,11 @@ export default function FormServicio({ servicio, onGuardar }) {
         activo: datos.activo,
       });
     } catch (error) {
-      if (error.campo) {
-        setErrores({ [error.campo]: error.message });
-        document.getElementById(`servicio-${error.campo}`)?.focus();
+      // Un campo (error.campo) o varios (error.errores, contrato EP3).
+      const porCampo = error.errores ?? (error.campo ? { [error.campo]: error.message } : null);
+      if (porCampo) {
+        setErrores(porCampo);
+        document.getElementById(`servicio-${Object.keys(porCampo)[0]}`)?.focus();
       } else {
         setErrorGeneral(error.message);
       }

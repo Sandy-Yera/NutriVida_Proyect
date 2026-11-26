@@ -1,0 +1,196 @@
+### ms-clinica · peticiones de prueba (C-33)
+#
+# Para la extensión "REST Client" de VS Code (humao.rest-client): "Send Request" sobre cada bloque.
+# Requisito: docker compose up -d (ms-clinica en :8083 con MySQL y las semillas de 03_clinica.sql).
+#
+# Tokens: con el login de Gabriel (G-32), POST /api/auth/login en :8081. Mientras no esté, el
+# perfil dev de ms-citas (:8082/api/dev/token) firma con el mismo JWT_SECRET y ms-clinica lo acepta.
+# Orden sugerido: catálogo público → tokens → servicios (admin) → fichas (dueño, 403) → contactos.
+#
+# Semillas: U100 (paciente, ficha de NUT001), U101 (paciente, ficha de NUT002), U010 Carolina
+# (NUT001), U011 Rodrigo (NUT002), U002 secretaria, U001 admin.
+
+@base = http://localhost:8083
+@tokens = http://localhost:8082
+
+# ============================================================== catálogo público (sin token)
+
+GET {{base}}/api/servicios
+
+###
+GET {{base}}/api/servicios?tipo=PLAN&texto=perdida
+
+###
+GET {{base}}/api/nutricionistas
+
+###
+# 404 con el JSON común
+GET {{base}}/api/servicios/XX999
+
+# ============================================================== tokens
+
+###
+# @name tokenAdmin
+POST {{tokens}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U001","rol":"ADMIN","nombre":"Admin"}
+
+###
+# @name tokenCarolina
+POST {{tokens}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U010","rol":"NUTRICIONISTA","nombre":"Carolina Fuentes","nutricionistaId":"NUT001"}
+
+###
+# @name tokenRodrigo
+POST {{tokens}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U011","rol":"NUTRICIONISTA","nombre":"Rodrigo Sepúlveda","nutricionistaId":"NUT002"}
+
+###
+# @name tokenAna
+POST {{tokens}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U100","rol":"PACIENTE","nombre":"Ana Rojas"}
+
+###
+# @name tokenSecretaria
+POST {{tokens}}/api/dev/token
+Content-Type: application/json
+
+{"id":"U002","rol":"SECRETARIA","nombre":"Secretaria"}
+
+# ============================================================== servicios (ADMIN)
+
+###
+# 401: sin token
+POST {{base}}/api/servicios
+Content-Type: application/json
+
+{"codigo":"CN006","tipo":"CONSULTA","nombre":"Consulta geriátrica","duracionMin":40,"modalidad":"Presencial","precio":30000,"descripcion":"Plan adaptado a mayores de 65 años."}
+
+###
+# 403: la secretaria no administra el catálogo
+POST {{base}}/api/servicios
+Authorization: Bearer {{tokenSecretaria.response.body.token}}
+Content-Type: application/json
+
+{"codigo":"CN006","tipo":"CONSULTA","nombre":"Consulta geriátrica","duracionMin":40,"modalidad":"Presencial","precio":30000,"descripcion":"Plan adaptado a mayores de 65 años."}
+
+###
+# 201
+POST {{base}}/api/servicios
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+Content-Type: application/json
+
+{"codigo":"CN006","tipo":"CONSULTA","nombre":"Consulta geriátrica","duracionMin":40,"modalidad":"Presencial","precio":30000,"descripcion":"Plan adaptado a mayores de 65 años."}
+
+###
+# 409: el código ya existe
+POST {{base}}/api/servicios
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+Content-Type: application/json
+
+{"codigo":"CN006","tipo":"CONSULTA","nombre":"Consulta geriátrica","duracionMin":40,"modalidad":"Presencial","precio":30000,"descripcion":"Plan adaptado a mayores de 65 años."}
+
+###
+# 400: errores por campo con los mensajes de EP2
+POST {{base}}/api/servicios
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+Content-Type: application/json
+
+{"codigo":"C6","tipo":"TALLER","nombre":"X","precio":1500.5}
+
+###
+PATCH {{base}}/api/servicios/CN006
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+Content-Type: application/json
+
+{"precio":32000}
+
+###
+# Desactivar: sale del catálogo público
+PATCH {{base}}/api/servicios/CN006/estado
+Authorization: Bearer {{tokenAdmin.response.body.token}}
+Content-Type: application/json
+
+{"activo":false}
+
+# ============================================================== pacientes y fichas
+
+###
+# Carolina ve solo a sus pacientes (U100)
+GET {{base}}/api/pacientes
+Authorization: Bearer {{tokenCarolina.response.body.token}}
+
+###
+# 403: pedir los pacientes de otro nutricionista
+GET {{base}}/api/pacientes?nutricionistaId=NUT002
+Authorization: Bearer {{tokenCarolina.response.body.token}}
+
+###
+# Rodrigo pide la ficha de U100: solo { id, nutricionistaId }
+GET {{base}}/api/pacientes/U100
+Authorization: Bearer {{tokenRodrigo.response.body.token}}
+
+###
+# Ana lee su propia ficha, sus mediciones y su plan
+GET {{base}}/api/pacientes/U100/mediciones
+Authorization: Bearer {{tokenAna.response.body.token}}
+
+###
+GET {{base}}/api/pacientes/U100/plan
+Authorization: Bearer {{tokenAna.response.body.token}}
+
+###
+# 201: Carolina registra una medición (fecha de hoy o anterior)
+POST {{base}}/api/pacientes/U100/mediciones
+Authorization: Bearer {{tokenCarolina.response.body.token}}
+Content-Type: application/json
+
+{"fecha":"2026-11-20","pesoKg":71.8,"tallaCm":170,"cinturaCm":83,"grasaPct":29.1,"notas":"Buena adherencia"}
+
+###
+# 403: Rodrigo no está a cargo de U100
+POST {{base}}/api/pacientes/U100/mediciones
+Authorization: Bearer {{tokenRodrigo.response.body.token}}
+Content-Type: application/json
+
+{"fecha":"2026-11-20","pesoKg":71.8,"tallaCm":170}
+
+###
+# 400: fuera de rango
+POST {{base}}/api/pacientes/U100/mediciones
+Authorization: Bearer {{tokenCarolina.response.body.token}}
+Content-Type: application/json
+
+{"fecha":"2026-11-20","pesoKg":350,"grasaPct":1}
+
+###
+# Nuevo plan vigente desde hoy
+PUT {{base}}/api/pacientes/U100/plan
+Authorization: Bearer {{tokenCarolina.response.body.token}}
+Content-Type: application/json
+
+{"objetivo":"Mantención","kcalDiarias":1900,"indicaciones":"2 litros de agua al día.","comidas":{"desayuno":"Avena con fruta","colacion":"Yogur","almuerzo":"Pescado con ensalada","once":"Pan integral con palta","cena":"Sopa de verduras"}}
+
+# ============================================================== contactos
+
+###
+POST {{base}}/api/contactos
+Authorization: Bearer {{tokenAna.response.body.token}}
+Content-Type: application/json
+
+{"nombre":"Ana Rojas","correo":"ana@ejemplo.cl","telefono":"+56 9 1234 5678","motivo":"Planes y precios","mensaje":"¿El plan de 3 meses incluye talleres?"}
+
+###
+GET {{base}}/api/contactos
+Authorization: Bearer {{tokenSecretaria.response.body.token}}
+
+###
+DELETE {{base}}/api/contactos/CT001
+Authorization: Bearer {{tokenAdmin.response.body.token}}
