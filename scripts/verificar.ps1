@@ -3,7 +3,8 @@
   Verificación de NutriVida antes de cada commit (definición de terminado de EP3).
 
 .DESCRIPTION
-  1. backend  : pruebas JUnit de ms-citas, dentro de Docker con Java 21 (igual que la imagen).
+  1. backend  : pruebas JUnit de ms-citas, ms-usuarios y ms-clinica, dentro de Docker con Java 21
+                (igual que la imagen). Un servicio sin pruebas se omite con aviso.
   1b. mutantes: PIT (pruebas mutantes) sobre la lógica de cálculo de ms-citas. Falla si sobrevive
                 un mutante que no esté en la lista de equivalentes conocidos.
   2. frontend : pruebas de Vitest (modo local); deben seguir pasando todas.
@@ -19,7 +20,7 @@
 
 .EXAMPLE
   .\scripts\verificar.ps1                     # todo
-  .\scripts\verificar.ps1 -Solo backend       # solo JUnit de ms-citas
+  .\scripts\verificar.ps1 -Solo backend       # solo JUnit de los 3 microservicios
   .\scripts\verificar.ps1 -Solo mutantes      # solo PIT (reporte en backend\ms-citas\target\pit-reports)
   .\scripts\verificar.ps1 -Solo frontend      # solo Vitest
   .\scripts\verificar.ps1 -Solo docker        # compose + esquema de citas + humo
@@ -100,31 +101,40 @@ function ConsultaCitas([string]$sql) {
 Push-Location $raiz
 try {
     # ---------------------------------------------------------------- 1. backend
+    # S-41: las pruebas de los 3 microservicios. Si uno todavía no tiene pruebas, se omite con
+    # aviso y no hace fallar la verificación (así nadie depende del avance de los otros).
     if ($Solo -in 'todo', 'backend') {
-        Write-Host "`n== Backend: JUnit de ms-citas (Docker, Java 21)" -ForegroundColor Cyan
-        $ms = Join-Path $raiz 'backend\ms-citas'
-        $log = Log 'backend'
-        & docker run --rm -v "${ms}:/app" -v nutrivida-m2:/root/.m2 -w /app `
-            maven:3.9-eclipse-temurin-21 mvn -B test 2>&1 | Out-File -Encoding utf8 $log
-        $codigo = $LASTEXITCODE
-        $texto = Get-Content $log -Raw -Encoding UTF8
-        $resumen = [regex]::Matches($texto, 'Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)(?!,)')
-        if ($resumen.Count -gt 0) {
-            $m = $resumen[$resumen.Count - 1]
-            $detalle = "{0} pruebas, {1} fallas, {2} errores, {3} omitidas" -f $m.Groups[1], $m.Groups[2], $m.Groups[3], $m.Groups[4]
-        } elseif ($texto -match 'No tests to run') {
-            $detalle = 'sin pruebas todavía'
-        } else {
-            $detalle = 'no compiló o Maven falló'
+        foreach ($servicio in 'ms-citas', 'ms-usuarios', 'ms-clinica') {
+            Write-Host "`n== Backend: JUnit de $servicio (Docker, Java 21)" -ForegroundColor Cyan
+            $ms = Join-Path $raiz "backend\$servicio"
+            $pruebas = @(Get-ChildItem -Path (Join-Path $ms 'src\test') -Recurse -Filter '*Test.java' -ErrorAction SilentlyContinue)
+            if ($pruebas.Count -eq 0) {
+                Anotar "JUnit $servicio" $true 'sin pruebas todavía: omitido'
+                continue
+            }
+            $log = Log "backend-$servicio"
+            & docker run --rm -v "${ms}:/app" -v nutrivida-m2:/root/.m2 -w /app `
+                maven:3.9-eclipse-temurin-21 mvn -B test 2>&1 | Out-File -Encoding utf8 $log
+            $codigo = $LASTEXITCODE
+            $texto = Get-Content $log -Raw -Encoding UTF8
+            $resumen = [regex]::Matches($texto, 'Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)(?!,)')
+            if ($resumen.Count -gt 0) {
+                $m = $resumen[$resumen.Count - 1]
+                $detalle = "{0} pruebas, {1} fallas, {2} errores, {3} omitidas" -f $m.Groups[1], $m.Groups[2], $m.Groups[3], $m.Groups[4]
+            } elseif ($texto -match 'No tests to run') {
+                $detalle = 'sin pruebas todavía'
+            } else {
+                $detalle = 'no compiló o Maven falló'
+            }
+            if ($codigo -ne 0) {
+                # Resumen de Surefire ("Clase.prueba » causa" o "Clase.prueba:42 esperado…") o error de compilación.
+                $fallas = ([regex]::Matches($texto, '(?m)^\[ERROR\]\s{2,}\S+\.\S+(:\d+)?\s.*$|^\[ERROR\].*\.java:\[\d+.*$') |
+                    Select-Object -First 5 | ForEach-Object { $_.Value.Trim() }) -join ' | '
+                if ($fallas) { $detalle += " :: $fallas" }
+                $detalle += " (log: $log)"
+            }
+            Anotar "JUnit $servicio" ($codigo -eq 0) $detalle
         }
-        if ($codigo -ne 0) {
-            # Resumen de Surefire ("Clase.prueba » causa" o "Clase.prueba:42 esperado…") o error de compilación.
-            $fallas = ([regex]::Matches($texto, '(?m)^\[ERROR\]\s{2,}\S+\.\S+(:\d+)?\s.*$|^\[ERROR\].*\.java:\[\d+.*$') |
-                Select-Object -First 5 | ForEach-Object { $_.Value.Trim() }) -join ' | '
-            if ($fallas) { $detalle += " :: $fallas" }
-            $detalle += " (log: $log)"
-        }
-        Anotar 'JUnit ms-citas' ($codigo -eq 0) $detalle
     }
 
     # ---------------------------------------------------------------- 1b. pruebas mutantes
